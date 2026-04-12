@@ -1,0 +1,26 @@
+{
+    "folders": [
+        {
+            "name": "esp-bridge — MCU-side C5 (Klipper UART bridge)",
+            "path": "esp-bridge"
+        },
+        {
+            "name": "esp-hosted-pi — Pi-side C5 (ESP-Hosted coprocessor)",
+            "path": "esp-hosted-pi"
+        }
+    ],
+    "settings": {
+        // PlatformIO manages its own toolchain — no idf.* settings needed.
+        // Build / Flash / Monitor via the PlatformIO sidebar or Ctrl+Alt+B/U.
+        //
+        // If you ever need to run idf.py directly (e.g. menuconfig), the
+        // local ESP-IDF v6.0 install is at C:\esp\v6.0\esp-idf.
+        // Run check_idf_tools.bat or run_idf.bat at the workspace root.
+
+        // Hide generated build artifacts from the explorer
+        "files.exclude": {
+            "**/.pio": true,
+            "**/build": true
+        }
+    }
+}

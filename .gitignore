@@ -1,0 +1,32 @@
+# PlatformIO build artifacts
+.pio/
+
+# IDF component manager downloads (reproducible via idf_component.yml)
+managed_components/
+
+# Build directories
+build/
+
+# Generated sdkconfig files (per-machine, built from sdkconfig.defaults)
+# Keep sdkconfig.defaults and sdkconfig.defaults.* (hand-written)
+sdkconfig
+sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
+!sdkconfig.defaults.*
+
+# Compiled firmware binaries
+*.bin
+*.elf
+*.map
+
+# esp-hosted is a third-party repo cloned on the Pi by setup-esp-hosted.sh
+# It is NOT part of this source tree
+esp-hosted/
+
+# VS Code local settings (contain machine-specific paths)
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini

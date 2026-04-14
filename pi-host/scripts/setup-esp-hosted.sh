@@ -10,8 +10,12 @@ sudo apt install -y git build-essential "linux-headers-$(uname -r)"
 
 echo "=== Enabling SPI in /boot/firmware/config.txt ==="
 CONFIG=/boot/firmware/config.txt
-if ! grep -q "dtparam=spi=on" "$CONFIG"; then
-    echo "dtparam=spi=on" | sudo tee -a "$CONFIG"
+# spi0-0cs enables SPI0 hardware with 0 spidev chip selects registered,
+# leaving spi10.0 free for esp32_spi to claim exclusively.
+# Remove old dtparam=spi=on if present (it registers spidev on CS0).
+sudo sed -i '/^dtparam=spi=on/d' "$CONFIG"
+if ! grep -q "dtoverlay=spi0-0cs" "$CONFIG"; then
+    echo "dtoverlay=spi0-0cs" | sudo tee -a "$CONFIG"
 fi
 # Disable Bluetooth to free up UART if needed
 if ! grep -q "dtoverlay=disable-bt" "$CONFIG"; then
@@ -37,13 +41,6 @@ if [ ! -f "$HOST_DIR/rpi_init.sh" ]; then
     exit 1
 fi
 cd "$HOST_DIR"
-
-# Release spidev's hold on spi10.0 so esp32_spi can claim it.
-# On Pi 5 the RP1 SPI0 appears as bus 10; spidev grabs it first.
-if [ -e /sys/bus/spi/drivers/spidev/spi10.0 ]; then
-    echo "=== Releasing spidev from spi10.0 ==="
-    echo spi10.0 | sudo tee /sys/bus/spi/drivers/spidev/unbind > /dev/null
-fi
 
 # GPIO numbers below are Pi 5 Linux GPIO numbers (BCM + 512 offset for RP1).
 # These match our wiring:

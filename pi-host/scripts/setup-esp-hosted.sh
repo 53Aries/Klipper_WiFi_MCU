@@ -40,7 +40,7 @@ echo "=== Installing spidev-disabler boot overlay ==="
 # Remove any leftover nospi10 entries from a previous script version.
 sudo sed -i '/^dtoverlay=nospi10/d' "$CONFIG"
 DTBO_DEST="/boot/firmware/overlays/spidev-disabler.dtbo"
-dtc "$SCRIPT_DIR/spidev-disabler.dts" -O dtb -o /tmp/spidev-disabler.dtbo
+dtc -@ "$SCRIPT_DIR/spidev-disabler.dts" -O dtb -o /tmp/spidev-disabler.dtbo
 if ! cmp -s /tmp/spidev-disabler.dtbo "$DTBO_DEST" 2>/dev/null; then
     sudo cp /tmp/spidev-disabler.dtbo "$DTBO_DEST"
     REBOOT_NEEDED=1

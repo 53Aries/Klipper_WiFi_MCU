@@ -3,20 +3,20 @@
 
 /*
  * Disable only the spidev child device on SPI bus 10 (Pi 5 SPI0 on the 40-pin
- * header).  Uses target-path (a string literal) instead of a phandle reference
- * so dtc can compile this without the base device tree present.
+ * header), leaving the spi10 bus controller alive for esp32_spi to claim.
  *
- * Path confirmed from dmesg on Pi 5 running Pi OS Trixie:
- *   OF: overlay: ... /axi/pcie@1000120000/rp1/spi@50000/spidev@0/status
+ * Uses target = <&spidev10> — the symbol is exported by the Pi 5 base DT
+ * (confirmed: /proc/device-tree/__symbols__/spidev10 exists).
  *
- * This leaves the spi10 bus controller itself alive so the esp32_spi kernel
- * module can claim it, while preventing the spidev driver from binding first.
+ * Must be compiled with dtc -@ so that dtc emits __fixups__ instead of trying
+ * to resolve the phandle at compile time.  The Pi 5 bootloader resolves fixups
+ * against the base DTB's __symbols__ at boot, exactly like official overlays.
  */
 / {
 	compatible = "brcm,bcm2712";
 
 	fragment@0 {
-		target-path = "/axi/pcie@1000120000/rp1/spi@50000/spidev@0";
+		target = <&spidev10>;
 		__overlay__ {
 			status = "disabled";
 		};

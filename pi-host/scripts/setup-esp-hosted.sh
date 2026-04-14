@@ -64,11 +64,12 @@ cd "$HOST_DIR"
 # These match our wiring:
 #   resetpin=529      → BCM GPIO17 (physical pin 11) → C5 RST
 #   spi-handshake=535 → BCM GPIO23 (physical pin 16) → C5 IO3
-#   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
-# NOTE: BCM22 (pin 15) cannot be used for handshake on Pi 5 — it is permanently
-#       claimed by the spi10 controller as its cs-gpios CS0 in the base DT.
+#   spi-handshake=536 → BCM GPIO24 (physical pin 18) → C5 IO3
+# NOTE: BCM22 (pin 15) is permanently claimed by spi10 cs-gpios (2712_BOOT_CS_N).
+#       BCM23 (pin 16) has a hardware pull-up (2712_BOOT_MISO) that holds the
+#       line HIGH permanently, preventing the driver from seeing rising edges.
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
-    spi-bus=10 spi-cs=0 resetpin=529 spi-handshake=535 spi-dataready=539 || {
+    spi-bus=10 spi-cs=0 resetpin=529 spi-handshake=536 spi-dataready=539 || {
     if [ "$REBOOT_NEEDED" -eq 1 ]; then
         echo ""
         echo "NOTE: Module built OK but SPI hardware is not active until after a reboot."
@@ -87,7 +88,7 @@ echo "  Pin 23 (GPIO11 SPI0 SCLK) → IO6"
 echo "  Pin 24 (GPIO8  SPI0 CE0)  → IO10"
 echo "  Pin 25 (GND)              → GND"
 echo "  Pin 13 (GPIO27 / #539)    → IO4  (Data Ready)"
-echo "  Pin 16 (GPIO23 / #535)    → IO3  (Handshake)"
+echo "  Pin 18 (GPIO24 / #536)    → IO3  (Handshake)"
 echo "  Pin 11 (GPIO17 / #529)    → RST"
 echo ""
 echo "Reboot required for SPI overlay to take effect."

@@ -51,7 +51,7 @@ Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V
 | Pin 9           | Left  | GND        | GND      |
 | Pin 11          | Left  | Reset      | RST      |
 | Pin 13          | Left  | Data Ready | IO4      |
-| Pin 16          | Left  | Handshake  | IO3      |
+| Pin 18          | Right | Handshake  | IO3      |
 | Pin 19          | Left  | SPI0 MOSI  | IO7      |
 | Pin 21          | Left  | SPI0 MISO  | IO2      |
 | Pin 23          | Left  | SPI0 SCLK  | IO6      |

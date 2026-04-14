@@ -38,6 +38,13 @@ if [ ! -f "$HOST_DIR/rpi_init.sh" ]; then
 fi
 cd "$HOST_DIR"
 
+# Release spidev's hold on spi10.0 so esp32_spi can claim it.
+# On Pi 5 the RP1 SPI0 appears as bus 10; spidev grabs it first.
+if [ -e /sys/bus/spi/drivers/spidev/spi10.0 ]; then
+    echo "=== Releasing spidev from spi10.0 ==="
+    echo spi10.0 | sudo tee /sys/bus/spi/drivers/spidev/unbind > /dev/null
+fi
+
 # GPIO numbers below are Pi 5 Linux GPIO numbers (BCM + 512 offset for RP1).
 # These match our wiring:
 #   resetpin=529      → BCM GPIO17 (physical pin 11) → C5 RST
@@ -45,7 +52,7 @@ cd "$HOST_DIR"
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
     spi-bus=10 resetpin=529 spi-handshake=534 spi-dataready=539 || {
-    if [ ! -e /dev/spidev0.0 ]; then
+    if [ ! -e /dev/spidev10.0 ]; then
         echo ""
         echo "NOTE: Module built OK but could not be loaded yet — SPI hardware"
         echo "is not active until after a reboot. This is expected on first run."

@@ -55,7 +55,7 @@ Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V
 | Pin 19          | Left  | SPI0 MOSI  | IO7      |
 | Pin 21          | Left  | SPI0 MISO  | IO2      |
 | Pin 23          | Left  | SPI0 SCLK  | IO6      |
-| Pin 26          | **Right** | SPI0 CS | IO10  |
+| Pin 24          | **Right** | SPI0 CS | IO10  |
 
 > The XIAO's 3V3 pin is regulator **output** only — do not connect it to the Pi. Use VBUS (accepts 5V input, feeds the onboard regulator).
 
@@ -97,8 +97,9 @@ chmod +x setup-esp-hosted.sh
 ```
 
 **What it does:**
-- Installs `git`, `build-essential`, `linux-headers-$(uname -r)`
-- Adds `dtparam=spi=on` to `/boot/firmware/config.txt` (enables SPI hardware)
+- Installs `git`, `build-essential`, `device-tree-compiler`, `linux-headers-$(uname -r)`
+- Adds `dtparam=spi=on` to `/boot/firmware/config.txt` (enables SPI hardware with CE0/CE1 GPIOs)
+- Compiles and installs a `spidev-disabler` boot overlay that prevents the spidev driver from claiming SPI0 CE0, leaving it free for the `esp32_spi` module
 - Adds `dtoverlay=disable-bt` to `/boot/firmware/config.txt`
 - Clones Espressif's `esp-hosted` repo and builds the `esp32_spi` kernel module
 - Loads the module with the correct GPIO numbers for our wiring

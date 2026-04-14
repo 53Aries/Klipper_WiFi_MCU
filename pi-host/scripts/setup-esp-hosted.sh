@@ -6,7 +6,7 @@ set -e
 
 echo "=== Installing build dependencies ==="
 sudo apt update
-sudo apt install -y git raspberrypi-kernel-headers build-essential
+sudo apt install -y git build-essential "linux-headers-$(uname -r)"
 
 echo "=== Enabling SPI in /boot/firmware/config.txt ==="
 CONFIG=/boot/firmware/config.txt

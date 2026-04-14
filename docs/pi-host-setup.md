@@ -97,7 +97,7 @@ chmod +x setup-esp-hosted.sh
 ```
 
 **What it does:**
-- Installs `git`, `build-essential`, `raspberrypi-kernel-headers`
+- Installs `git`, `build-essential`, `linux-headers-$(uname -r)`
 - Adds `dtparam=spi=on` to `/boot/firmware/config.txt` (enables SPI hardware)
 - Adds `dtoverlay=disable-bt` to `/boot/firmware/config.txt`
 - Clones Espressif's `esp-hosted` repo and builds the `esp32_spi` kernel module

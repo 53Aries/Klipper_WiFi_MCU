@@ -73,7 +73,7 @@ Once logged in, clone this repo:
 
 ```bash
 cd ~
-git clone https://github.com/YOUR_USERNAME/KlipperESPwifi.git
+git clone https://github.com/53Aries/Klipper_WiFi_MCU.git KlipperESPwifi
 ```
 
 > If you haven't pushed the repo to GitHub yet, copy it over with `scp` or a USB drive instead:

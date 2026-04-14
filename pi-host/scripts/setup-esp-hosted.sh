@@ -4,6 +4,8 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "=== Installing build dependencies ==="
 sudo apt update
 sudo apt install -y git build-essential device-tree-compiler "linux-headers-$(uname -r)"
@@ -37,7 +39,6 @@ echo "=== Installing spidev-disabler boot overlay ==="
 # The base DT exports &spidev10 (confirmed via /proc/device-tree/__symbols__).
 # Remove any leftover nospi10 entries from a previous script version.
 sudo sed -i '/^dtoverlay=nospi10/d' "$CONFIG"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DTBO_DEST="/boot/firmware/overlays/spidev-disabler.dtbo"
 dtc "$SCRIPT_DIR/spidev-disabler.dts" -O dtb -o /tmp/spidev-disabler.dtbo
 if ! cmp -s /tmp/spidev-disabler.dtbo "$DTBO_DEST" 2>/dev/null; then

@@ -16,7 +16,7 @@ Signals are ordered by physical pin number. All wires land on the **left (odd) c
 | GND         | GND      | Pin 9             | Left  | GND       | GND      | —          |
 | Reset       | BCM 17   | Pin 11            | Left  | RST / EN  | RESET    | Pi → XIAO  |
 | DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4    | MTCK     | XIAO → Pi  |
-| Handshake   | BCM 22   | Pin 15            | Left  | GPIO 3    | MTDI     | XIAO → Pi  |
+| Handshake   | BCM 23   | Pin 16            | Left  | GPIO 3    | MTDI     | XIAO → Pi  |
 | SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3       | Pi → XIAO  |
 | SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS     | XIAO → Pi  |
 | SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT | Pi → XIAO  |
@@ -26,6 +26,8 @@ Signals are ordered by physical pin number. All wires land on the **left (odd) c
 
 > ⚠ **Pin 24 (CS) is the only SPI wire on the right side.** We use SPI0 CE0 (GPIO 8, pin 24). The spidev driver is prevented from claiming CE0 by a boot-time overlay (`spidev-disabler`) installed by the setup script.
 
+> ⚠ **Pin 15 (BCM22) cannot be used for Handshake on Pi 5.** BCM22 is permanently claimed by the `spi10` controller as its `cs-gpios` CS0 entry in the Pi 5 base device tree (`2712_BOOT_CS_N`). Attempting to use it for Handshake causes `EBUSY` when `esp32_spi` tries to request it. We use Pin 16 (BCM23) instead.
+
 ---
 
 ## Linux Driver Parameters (Pi 5 / RP1)
@@ -34,7 +36,7 @@ Pi 5 GPIOs are addressed as `BCM + 512` due to the RP1 I/O controller offset:
 
 ```
 resetpin=529        # BCM 17 + 512  (Pin 11)
-spi-handshake=534   # BCM 22 + 512  (Pin 15)
+spi-handshake=535   # BCM 23 + 512  (Pin 16)
 spi-dataready=539   # BCM 27 + 512  (Pin 13)
 ```
 

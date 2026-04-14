@@ -43,7 +43,7 @@ cd "$HOST_DIR"
 #   resetpin=529      → BCM GPIO17 (physical pin 11) → C5 RST
 #   spi-handshake=534 → BCM GPIO22 (physical pin 15) → C5 IO3
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
-./rpi_init.sh wifi=spi bt=- spi-mode=3 \
+./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
     resetpin=529 spi-handshake=534 spi-dataready=539
 
 echo ""

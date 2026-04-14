@@ -44,7 +44,7 @@ cd "$HOST_DIR"
 #   spi-handshake=534 → BCM GPIO22 (physical pin 15) → C5 IO3
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
-    resetpin=529 spi-handshake=534 spi-dataready=539 || {
+    spi-bus=10 resetpin=529 spi-handshake=534 spi-dataready=539 || {
     if [ ! -e /dev/spidev0.0 ]; then
         echo ""
         echo "NOTE: Module built OK but could not be loaded yet — SPI hardware"

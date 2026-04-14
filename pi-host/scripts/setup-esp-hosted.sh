@@ -44,7 +44,16 @@ cd "$HOST_DIR"
 #   spi-handshake=534 → BCM GPIO22 (physical pin 15) → C5 IO3
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
-    resetpin=529 spi-handshake=534 spi-dataready=539
+    resetpin=529 spi-handshake=534 spi-dataready=539 || {
+    if [ ! -e /dev/spidev0.0 ]; then
+        echo ""
+        echo "NOTE: Module built OK but could not be loaded yet — SPI hardware"
+        echo "is not active until after a reboot. This is expected on first run."
+    else
+        echo "ERROR: Failed to insert module even though SPI is available."
+        exit 1
+    fi
+}
 
 echo ""
 echo "=== SPI GPIO pinout (Pi 5 physical pins → ESP32-C5) ==="

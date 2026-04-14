@@ -14,8 +14,10 @@ CONFIG=/boot/firmware/config.txt
 # leaving spi10.0 free for esp32_spi to claim exclusively.
 # Remove old dtparam=spi=on if present (it registers spidev on CS0).
 sudo sed -i '/^dtparam=spi=on/d' "$CONFIG"
+REBOOT_NEEDED=0
 if ! grep -q "dtoverlay=spi0-0cs" "$CONFIG"; then
     echo "dtoverlay=spi0-0cs" | sudo tee -a "$CONFIG"
+    REBOOT_NEEDED=1
 fi
 # Disable Bluetooth to free up UART if needed
 if ! grep -q "dtoverlay=disable-bt" "$CONFIG"; then
@@ -49,12 +51,12 @@ cd "$HOST_DIR"
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
     spi-bus=10 resetpin=529 spi-handshake=534 spi-dataready=539 || {
-    if [ ! -e /dev/spidev10.0 ]; then
+    if [ "$REBOOT_NEEDED" -eq 1 ]; then
         echo ""
-        echo "NOTE: Module built OK but could not be loaded yet — SPI hardware"
-        echo "is not active until after a reboot. This is expected on first run."
+        echo "NOTE: Module built OK but SPI hardware is not active until after a reboot."
+        echo "This is expected on the first run."
     else
-        echo "ERROR: Failed to insert module even though SPI is available."
+        echo "ERROR: Module failed to load. Run: dmesg | tail -30"
         exit 1
     fi
 }

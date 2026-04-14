@@ -97,9 +97,8 @@ chmod +x setup-esp-hosted.sh
 ```
 
 **What it does:**
-- Installs `git`, `build-essential`, `device-tree-compiler`, `linux-headers-$(uname -r)`
-- Adds `dtparam=spi=on` to `/boot/firmware/config.txt` (enables SPI hardware with CE0/CE1 GPIOs)
-- Compiles and installs a `spidev-disabler` boot overlay that prevents the spidev driver from claiming SPI0 CE0, leaving it free for the `esp32_spi` module
+- Installs `git`, `build-essential`, `linux-headers-$(uname -r)`
+- Adds `dtoverlay=nospi10` to `/boot/firmware/config.txt` — the official Pi 5 overlay that disables the spidev device on SPI bus 10, leaving it free for the `esp32_spi` module
 - Adds `dtoverlay=disable-bt` to `/boot/firmware/config.txt`
 - Clones Espressif's `esp-hosted` repo and builds the `esp32_spi` kernel module
 - Loads the module with the correct GPIO numbers for our wiring

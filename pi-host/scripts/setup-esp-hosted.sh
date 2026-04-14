@@ -6,7 +6,7 @@ set -e
 
 echo "=== Installing build dependencies ==="
 sudo apt update
-sudo apt install -y git build-essential device-tree-compiler "linux-headers-$(uname -r)"
+sudo apt install -y git build-essential "linux-headers-$(uname -r)"
 
 echo "=== Enabling SPI in /boot/firmware/config.txt ==="
 CONFIG=/boot/firmware/config.txt
@@ -30,19 +30,13 @@ else
     git -C esp-hosted submodule update --init --recursive
 fi
 
-echo "=== Installing spidev-disabler boot overlay ==="
-# Pi 5 firmware silently skips overlays whose compatible doesn't match.
-# The esp-hosted spidev_disabler.dts uses brcm,bcm2708 (wrong for Pi 5).
-# We supply spidev-disabler.dts with brcm,bcm2712 so it actually fires at boot.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DTBO_DEST="/boot/firmware/overlays/spidev-disabler.dtbo"
-dtc "$SCRIPT_DIR/spidev-disabler.dts" -O dtb -o /tmp/spidev-disabler.dtbo 2>/dev/null
-if ! cmp -s /tmp/spidev-disabler.dtbo "$DTBO_DEST" 2>/dev/null; then
-    sudo cp /tmp/spidev-disabler.dtbo "$DTBO_DEST"
-    REBOOT_NEEDED=1
-fi
-if ! grep -q "dtoverlay=spidev-disabler" "$CONFIG"; then
-    echo "dtoverlay=spidev-disabler" | sudo tee -a "$CONFIG"
+echo "=== Disabling spidev on SPI0 (nospi10 overlay) ==="
+# Pi 5 enables spidev on SPI bus 10 (the 40-pin SPI0) by default.
+# The official nospi10 overlay removes that device so esp32_spi can claim it.
+# Remove any leftover spidev-disabler entries from a previous version of this script.
+sudo sed -i '/^dtoverlay=spidev-disabler/d' "$CONFIG"
+if ! grep -q "dtoverlay=nospi10" "$CONFIG"; then
+    echo "dtoverlay=nospi10" | sudo tee -a "$CONFIG"
     REBOOT_NEEDED=1
 fi
 

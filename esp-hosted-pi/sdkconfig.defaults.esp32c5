@@ -40,6 +40,6 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 #   MOSI=IO7  MISO=IO2  SCLK=IO6  CS=IO10  Handshake=IO3  DataReady=IO4
 #
 # Pi 5 Linux GPIO numbers used in rpi_init.sh (BCM + 512 for RP1):
-#   resetpin=518  (GPIO6 / pin 31)
+#   resetpin=529  (GPIO17 / pin 11)
 #   spi-handshake=534  (GPIO22 / pin 15)
 #   spi-dataready=539  (GPIO27 / pin 13)

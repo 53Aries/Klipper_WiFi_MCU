@@ -8,17 +8,21 @@ plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
 ## Wiring Table
 
-| Signal      | Pi 5 BCM | Pi 5 Physical Pin | XIAO GPIO | XIAO Pad | Direction      |
-|-------------|----------|-------------------|-----------|----------|----------------|
-| SPI MOSI    | BCM 10   | Pin 19            | GPIO 7    | D3       | Pi → XIAO      |
-| SPI MISO    | BCM 9    | Pin 21            | GPIO 2    | MTMS     | XIAO → Pi      |
-| SPI SCLK    | BCM 11   | Pin 23            | GPIO 6    | ADC\_BAT | Pi → XIAO      |
-| SPI CS      | BCM 8    | Pin 24            | GPIO 10   | D10/MOSI | Pi → XIAO      |
-| Handshake   | BCM 22   | Pin 15            | GPIO 3    | MTDI     | XIAO → Pi      |
-| DataReady   | BCM 27   | Pin 13            | GPIO 4    | MTCK     | XIAO → Pi      |
-| Reset       | BCM 6    | Pin 31            | RST / EN  | RESET    | Pi → XIAO      |
-| GND         | GND      | Pin 6 / Pin 9     | GND       | GND      | —              |
-| 3.3V        | 3V3      | Pin 1 / Pin 17    | 3V3       | 3V3      | Pi → XIAO      |
+Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except SPI CS, which is fixed to GPIO 8 / pin 24 (right column) by the Pi's SPI0 hardware.
+
+| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | XIAO GPIO | XIAO Pad | Direction  |
+|-------------|----------|-------------------|-------|-----------|----------|------------|
+| GND         | GND      | Pin 9             | Left  | GND       | GND      | —          |
+| Reset       | BCM 17   | Pin 11            | Left  | RST / EN  | RESET    | Pi → XIAO  |
+| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4    | MTCK     | XIAO → Pi  |
+| Handshake   | BCM 22   | Pin 15            | Left  | GPIO 3    | MTDI     | XIAO → Pi  |
+| 3.3V        | 3V3      | Pin 17            | Left  | 3V3       | 3V3      | Pi → XIAO  |
+| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3       | Pi → XIAO  |
+| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS     | XIAO → Pi  |
+| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT | Pi → XIAO  |
+| SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10/MOSI | Pi → XIAO  |
+
+> ⚠ **Pin 24 (CS) is the only right-side wire.** SPI0 CE0 is fixed to GPIO 8 by the Pi's hardware — it cannot be moved without a custom device tree overlay.
 
 ---
 
@@ -27,7 +31,7 @@ plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 Pi 5 GPIOs are addressed as `BCM + 512` due to the RP1 I/O controller offset:
 
 ```
-resetpin=518        # BCM 6  + 512  (Pin 31)
+resetpin=529        # BCM 17 + 512  (Pin 11)
 spi-handshake=534   # BCM 22 + 512  (Pin 15)
 spi-dataready=539   # BCM 27 + 512  (Pin 13)
 ```

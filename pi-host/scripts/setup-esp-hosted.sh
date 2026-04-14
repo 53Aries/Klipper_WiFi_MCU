@@ -38,14 +38,11 @@ cd "$HOST_DIR"
 
 # GPIO numbers below are Pi 5 Linux GPIO numbers (BCM + 512 offset for RP1).
 # These match our wiring:
-#   resetpin=518      → BCM GPIO6  (physical pin 31) → C5 RST
+#   resetpin=529      → BCM GPIO17 (physical pin 11) → C5 RST
 #   spi-handshake=534 → BCM GPIO22 (physical pin 15) → C5 IO3
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
-#
-# Note: these happen to be rpi_init.sh's default values — explicitly listed here
-# for clarity and to guard against script defaults changing in future versions.
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 \
-    resetpin=518 spi-handshake=534 spi-dataready=539
+    resetpin=529 spi-handshake=534 spi-dataready=539
 
 echo ""
 echo "=== SPI GPIO pinout (Pi 5 physical pins → ESP32-C5) ==="
@@ -56,7 +53,7 @@ echo "  Pin 24 (GPIO8  SPI0 CE0)  → IO10"
 echo "  Pin 25 (GND)              → GND"
 echo "  Pin 13 (GPIO27 / #539)    → IO4  (Data Ready)"
 echo "  Pin 15 (GPIO22 / #534)    → IO3  (Handshake)"
-echo "  Pin 31 (GPIO6  / #518)    → RST"
+echo "  Pin 11 (GPIO17 / #529)    → RST"
 echo ""
 echo "Reboot required for SPI overlay to take effect."
 echo "After reboot, run: lsmod | grep esp — you should see esp32_spi"

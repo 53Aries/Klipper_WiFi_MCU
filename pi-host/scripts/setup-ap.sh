@@ -36,7 +36,7 @@ sudo nmcli con add \
     type wifi \
     ifname wlan0 \
     con-name wlan0-static \
-    ssid klipper-mcu-net \
+    ssid klipper \
     -- \
     wifi-sec.key-mgmt none \
     ipv4.method manual \
@@ -52,4 +52,4 @@ sudo systemctl restart hostapd dnsmasq
 
 echo ""
 echo "Done. Check 'sudo systemctl status hostapd' to verify."
-echo "Remember to set your wpa_passphrase in /etc/hostapd/hostapd.conf first."
+echo "SSID: klipper  |  Password: klipper"

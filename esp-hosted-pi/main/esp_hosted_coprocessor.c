@@ -79,6 +79,56 @@ static const char TAG[] = "fg_slave";
 
 volatile uint8_t datapath = 0;
 volatile uint8_t station_connected = 0;
+volatile uint8_t host_active = 0;  /* set only when Pi kernel driver opens data path */
+
+/* ── Status LED ──────────────────────────────────────────────────────────
+ * GPIO27 = USER_LED (yellow) on XIAO ESP32-C5
+ *   Booting (no Pi kernel driver)    : fast blink (100 ms)
+ *   Pi driver loaded, not yet active : slow blink (500 ms)
+ *   Pi kernel driver active          : steady on
+ * ────────────────────────────────────────────────────────────────────── */
+#define STATUS_LED_GPIO  27
+
+/* LED is active-low: gpio LOW = on, gpio HIGH = off */
+#define LED_ON()   gpio_set_level(STATUS_LED_GPIO, 0)
+#define LED_OFF()  gpio_set_level(STATUS_LED_GPIO, 1)
+
+static void status_led_init(void)
+{
+    gpio_config_t cfg = {
+        .pin_bit_mask = (1ULL << STATUS_LED_GPIO),
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&cfg);
+    LED_OFF();
+}
+
+static void status_led_task(void *arg)
+{
+    status_led_init();
+    for (;;) {
+        if (host_active) {
+            /* Pi kernel driver active — steady on */
+            LED_ON();
+            vTaskDelay(pdMS_TO_TICKS(200));
+        } else if (datapath) {
+            /* SPI init done, waiting for Pi kernel driver — slow blink */
+            LED_ON();
+            vTaskDelay(pdMS_TO_TICKS(500));
+            LED_OFF();
+            vTaskDelay(pdMS_TO_TICKS(500));
+        } else {
+            /* booting / no SPI host yet — fast blink */
+            LED_ON();
+            vTaskDelay(pdMS_TO_TICKS(100));
+            LED_OFF();
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+}
 volatile uint8_t softap_started = 0;
 
 interface_context_t *if_context = NULL;
@@ -582,6 +632,7 @@ int event_handler(uint8_t val)
 			if (if_handle) {
 				if_handle->state = ACTIVE;
 				datapath = 1;
+				host_active = 1;
 				ESP_EARLY_LOGI(TAG, "Start Data Path");
 				if (host_reset_sem) {
 					xSemaphoreGive(host_reset_sem);
@@ -593,6 +644,7 @@ int event_handler(uint8_t val)
 
 		case ESP_CLOSE_DATA_PATH:
 			datapath = 0;
+			host_active = 0;
 			if (if_handle) {
 				ESP_EARLY_LOGI(TAG, "Stop Data Path");
 				if_handle->state = DEACTIVE;
@@ -1048,6 +1100,9 @@ esp_err_t esp_hosted_coprocessor_init(void)
 
 void app_main(void)
 {
+	/* Status LED — start immediately so blink is visible during boot */
+	xTaskCreate(status_led_task, "status_led", 2048, NULL, 2, NULL);
+
 	/* Initialize NVS */
 	esp_err_t ret = nvs_flash_init();
 

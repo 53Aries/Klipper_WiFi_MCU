@@ -1,8 +1,8 @@
 #pragma once
 
 // ── WiFi ──────────────────────────────────────────────────────────────────
-#define WIFI_SSID        "klipper-mcu-net"
-#define WIFI_PASSWORD    "CHANGE_ME"
+#define WIFI_SSID        "klipper"
+#define WIFI_PASSWORD    "klipper"
 #define WIFI_CHANNEL     36           // Must match hostapd.conf
 
 // Static IP — must match dnsmasq static lease for this board's MAC

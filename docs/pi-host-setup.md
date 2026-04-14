@@ -1,76 +1,107 @@
 # Pi Host Setup Guide
 
-This document covers everything needed to configure a Raspberry Pi 5 as the Klipper WiFi host — from wiring through to a working Klipper connection.
+This guide takes you from a **brand-new Raspberry Pi OS install** to a fully working Klipper WiFi MCU setup. Follow every step in order.
 
-**System context:** The XIAO ESP32-C5 plugged into the Pi runs ESP-Hosted firmware, which makes the Pi's `wlan0` interface a real WiFi adapter. The Pi then hosts a hidden 5GHz AP (`klipper-mcu-net`) that the MCU-side XIAO boards connect to. Klipper talks to each MCU via `socket://192.168.42.x:23`, and has no idea WiFi is involved.
-
----
-
-## Prerequisites
-
-- Raspberry Pi 5 running **Pi OS Bookworm** (64-bit recommended)
-- XIAO ESP32-C5 soldered and wired per [docs/spi-pinout.md](spi-pinout.md)
-- USB cable to flash the XIAO from a PC (only needed once)
-- Internet access on the Pi (via its onboard NIC, not wlan0)
+**What you need physically:**
+- Raspberry Pi 5 running **Pi OS Bookworm** (64-bit), already booted and on your local network
+- XIAO ESP32-C5 already flashed with the `esp-hosted-pi` firmware (do that on your PC first — see below)
+- Jumper wires to connect the XIAO to the Pi 40-pin header
+- A second XIAO ESP32-C5 connected to your STM32 MCU board, already flashed with `esp-bridge` firmware
+- SSH access to the Pi from your PC
 
 ---
 
-## Step 1 — Flash the ESP-Hosted firmware
+## Before you start — flash the two XIAOs on your PC
 
-Do this **on your PC** before connecting the XIAO to the Pi.
+Do both of these on your Windows PC **before** touching the Pi.
 
-1. Open the `esp-hosted-pi` project in VS Code / PlatformIO
-2. Enter flash mode on the XIAO: **hold BOOT, tap RESET, release BOOT**
-3. Run **Upload** in PlatformIO (port auto-detects, or set `upload_port` in `platformio.ini`)
-4. After flashing succeeds, disconnect the USB cable
+### Pi-side XIAO (esp-hosted-pi firmware)
 
-The XIAO is now running ESP-Hosted-FG. It will sit idle until the Pi drives it over SPI.
+1. Open the `esp-hosted-pi` folder in VS Code / PlatformIO
+2. Hold **BOOT** on the XIAO, tap **RESET**, release **BOOT** — the XIAO is now in flash mode
+3. Run **Upload** in PlatformIO
+4. When it finishes, disconnect the USB cable — the XIAO is ready
 
----
+### MCU-side XIAO (esp-bridge firmware)
 
-## Step 2 — Wire the XIAO to the Pi
+1. Open the `esp-bridge` folder in VS Code / PlatformIO
+2. Verify [esp-bridge/main/config.h](../esp-bridge/main/config.h) looks like this (already set):
+   ```c
+   #define WIFI_SSID     "klipper"
+   #define WIFI_PASSWORD "klipper"
+   #define STATIC_IP     "192.168.42.11"
+   ```
+3. Hold **BOOT**, tap **RESET**, release **BOOT**
+4. Run **Upload** in PlatformIO
+5. Disconnect USB — the XIAO is ready
 
-Connect the XIAO to the Pi 40-pin header as documented in [docs/spi-pinout.md](spi-pinout.md).
-
-Quick summary:
-
-| Pi physical pin | Signal    | XIAO pin |
-|-----------------|-----------|----------|
-| 19 (SPI0 MOSI)  | MOSI      | IO7      |
-| 21 (SPI0 MISO)  | MISO      | IO2      |
-| 23 (SPI0 SCLK)  | SCLK      | IO6      |
-| 24 (SPI0 CE0)   | CS        | IO10     |
-| 13 (BCM27/#539) | Data Ready| IO4      |
-| 15 (BCM22/#534) | Handshake | IO3      |
-| 31 (BCM6/#518)  | RESET     | RST      |
-| 25 (GND)        | GND       | GND      |
-| 1 or 17 (3V3)   | Power     | 3V3      |
-
-> **Do not power the XIAO from 5V.** Use the Pi's 3.3 V rail (pin 1 or 17).
+> For a second MCU board, change `STATIC_IP` to `"192.168.42.12"`, re-flash, and repeat.
 
 ---
 
-## Step 3 — Set up ESP-Hosted on the Pi
+## Step 1 — Wire the pi-side XIAO to the Pi 40-pin header
 
-SSH into the Pi and run the setup script:
+The XIAO connects to the Pi via SPI. Use the Pi's **3.3 V rail** — do not use 5 V.
+
+Almost all wires land on the **left column** of the header (odd pins). Pin 24 (CS) is the only right-side wire — it's fixed by the Pi's SPI0 hardware.
+
+| Pi physical pin | Side  | Signal     | XIAO pad |
+|-----------------|-------|------------|-----------|
+| Pin 9           | Left  | GND        | GND      |
+| Pin 11          | Left  | Reset      | RST      |
+| Pin 13          | Left  | Data Ready | IO4      |
+| Pin 15          | Left  | Handshake  | IO3      |
+| Pin 17          | Left  | 3.3 V      | 3V3      |
+| Pin 19          | Left  | SPI0 MOSI  | IO7      |
+| Pin 21          | Left  | SPI0 MISO  | IO2      |
+| Pin 23          | Left  | SPI0 SCLK  | IO6      |
+| Pin 24          | **Right** | SPI0 CS | IO10   |
+
+Full details with signal directions and driver GPIO numbers: [docs/spi-pinout.md](spi-pinout.md)
+
+---
+
+## Step 2 — Get the project onto the Pi
+
+SSH into the Pi from your PC (replace `raspberrypi.local` with your Pi's hostname or IP):
 
 ```bash
-cd ~/KlipperESPwifi/pi-host/scripts   # or wherever you've cloned the repo
+ssh pi@raspberrypi.local
+```
+
+Once logged in, clone this repo:
+
+```bash
+cd ~
+git clone https://github.com/YOUR_USERNAME/KlipperESPwifi.git
+```
+
+> If you haven't pushed the repo to GitHub yet, copy it over with `scp` or a USB drive instead:
+> ```bash
+> # Run this on your PC (PowerShell), not the Pi
+> scp -r C:\KlipperESPwifi pi@raspberrypi.local:~/KlipperESPwifi
+> ```
+
+---
+
+## Step 3 — Run the ESP-Hosted setup script
+
+This installs the SPI kernel driver that makes the XIAO appear as `wlan0`.
+
+```bash
+cd ~/KlipperESPwifi/pi-host/scripts
 chmod +x setup-esp-hosted.sh
 ./setup-esp-hosted.sh
 ```
 
-**What the script does:**
-- Installs `raspberrypi-kernel-headers`, `build-essential`, `git`
-- Adds `dtparam=spi=on` and `dtoverlay=disable-bt` to `/boot/firmware/config.txt`
-- Clones the `esp-hosted` repository from Espressif
-- Builds the `esp32_spi` kernel module
-- Loads it with the correct GPIO parameters for our wiring:
-  - `resetpin=518` — BCM GPIO6, physical pin 31 → XIAO RST
-  - `spi-handshake=534` — BCM GPIO22, physical pin 15 → XIAO IO3
-  - `spi-dataready=539` — BCM GPIO27, physical pin 13 → XIAO IO4
+**What it does:**
+- Installs `git`, `build-essential`, `raspberrypi-kernel-headers`
+- Adds `dtparam=spi=on` to `/boot/firmware/config.txt` (enables SPI hardware)
+- Adds `dtoverlay=disable-bt` to `/boot/firmware/config.txt`
+- Clones Espressif's `esp-hosted` repo and builds the `esp32_spi` kernel module
+- Loads the module with the correct GPIO numbers for our wiring
 
-> **Reboot required** after this script — the SPI `dtparam` only takes effect on next boot.
+The script will print a wiring summary at the end. **SPI is not active until you reboot:**
 
 ```bash
 sudo reboot
@@ -78,43 +109,41 @@ sudo reboot
 
 ---
 
-## Step 4 — Verify ESP-Hosted is running
+## Step 4 — Verify the XIAO is visible as wlan0
 
-After reboot, SSH back in and check:
+After the reboot, SSH back in:
+
+```bash
+ssh pi@raspberrypi.local
+```
+
+Run these checks:
 
 ```bash
 lsmod | grep esp
-# Expected: esp32_spi   <size>   0
+```
+Expected output: a line containing `esp32_spi`
 
+```bash
 ip link show wlan0
-# Expected: wlan0: <BROADCAST,MULTICAST> ...
-
-dmesg | grep -i esp
-# Should show "ESP-Hosted: SPI transport up" or similar
 ```
+Expected output: a line beginning `2: wlan0: <BROADCAST,MULTICAST>...`
 
-If `wlan0` does not appear:
-- Re-check wiring against [docs/spi-pinout.md](spi-pinout.md)
-- Confirm SPI is enabled: `ls /dev/spi*` should show `/dev/spidev0.0`
-- Check `dmesg | tail -30` for probe errors
+```bash
+dmesg | grep -i esp | tail -10
+```
+Expected: messages about SPI transport initialising
+
+**If `wlan0` does not appear:**
+- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin
+- Check SPI is enabled: `ls /dev/spi*` should show `/dev/spidev0.0` — if not, check `/boot/firmware/config.txt` for `dtparam=spi=on` and reboot again
+- Check for errors: `dmesg | tail -30`
 
 ---
 
-## Step 5 — Edit hostapd.conf before starting the AP
+## Step 5 — Start the WiFi AP
 
-**Set your WiFi password** in [pi-host/hostapd/hostapd.conf](../pi-host/hostapd/hostapd.conf):
-
-```
-wpa_passphrase=CHANGE_ME   ← replace this
-```
-
-Match the same password in all `esp-bridge` firmware configs — see [Step 8](#step-8--configure-and-flash-esp-bridge).
-
-Optionally change `channel=36` to `149` if 36 is congested in your environment. The MCU board firmware reads the channel from `config.h` (`WIFI_CHANNEL`), so keep them consistent.
-
----
-
-## Step 6 — Start the AP
+This sets up `wlan0` as a WiFi 6 access point. The MCU boards will connect to it.
 
 ```bash
 cd ~/KlipperESPwifi/pi-host/scripts
@@ -122,158 +151,184 @@ chmod +x setup-ap.sh
 ./setup-ap.sh
 ```
 
-**What the script does:**
+**What it does:**
 - Installs `hostapd` and `dnsmasq`
-- Tells NetworkManager to leave `wlan0` alone
+- Tells NetworkManager to leave `wlan0` alone so `hostapd` can own it
 - Assigns static IP `192.168.42.1/24` to `wlan0`
-- Copies `hostapd.conf` → `/etc/hostapd/hostapd.conf`
-- Copies `dnsmasq.conf` → `/etc/dnsmasq.conf`
-- Copies `sysctl-klipper.conf` → `/etc/sysctl.d/99-klipper.conf` and applies it
-- Creates a persistent NetworkManager profile to hold the static IP across reboots
-- Enables and starts `hostapd` + `dnsmasq`
+- Copies `hostapd.conf` and `dnsmasq.conf` from this repo to `/etc/`
+- Applies TCP tuning to reduce latency (disables Nagle algorithm)
+- Creates a persistent NM profile so the static IP survives reboots
+- Enables and starts `hostapd` and `dnsmasq`
 
-Verify it worked:
+**AP credentials (already configured):**
+- SSID: `klipper`
+- Password: `klipper`
+- Channel: 36 (5 GHz)
+- SSID is hidden (won't appear in normal WiFi scans)
+
+**Verify it worked:**
 
 ```bash
 sudo systemctl status hostapd
+# Should show: Active: active (running)
+
 sudo systemctl status dnsmasq
-ip addr show wlan0   # should show 192.168.42.1/24
+# Should show: Active: active (running)
+
+ip addr show wlan0
+# Should show: inet 192.168.42.1/24
 ```
+
+**If hostapd fails to start:**
+```bash
+sudo journalctl -u hostapd -n 30
+```
+- If the log says `wlan0: driver does not support configuration of vlan` or similar, re-check the XIAO wiring — hostapd cannot start without a working wlan0
+- If another process owns wlan0: `sudo nmcli dev set wlan0 managed no` then re-run `./setup-ap.sh`
 
 ---
 
-## Step 7 — Get the Pi's wlan0 MAC address
+## Step 6 — Power up and connect an MCU board
 
-You need this to pin the MCU boards to the Pi's AP (faster reconnect):
+1. Connect the MCU-side XIAO to your STM32 board (or just power it standalone to test)
+2. Power the MCU board on
+
+The XIAO will boot and attempt to join the `klipper` network automatically. This usually takes 3–10 seconds.
+
+Watch for it from the Pi:
 
 ```bash
-ip link show wlan0 | grep ether
-# Example: link/ether dc:a6:32:xx:xx:xx brd ff:ff:ff:ff:ff:ff
+watch -n 1 cat /var/lib/misc/dnsmasq.leases
 ```
 
-Note this MAC — you'll use it in `config.h` in the next step.
+When the board connects you'll see a line like:
 
-You also need the MAC of each MCU-side XIAO board to create static DHCP leases. Get them after the first successful connection (see Step 9).
+```
+1744600000 aa:bb:cc:dd:ee:ff 192.168.42.10 esp-bridge *
+```
+
+Note the MAC address (`aa:bb:cc:dd:ee:ff` in this example) — you need it in the next step.
+
+Press `Ctrl+C` to stop watching.
 
 ---
 
-## Step 8 — Configure and flash esp-bridge
+## Step 7 — Add a static DHCP lease for the MCU board
 
-Edit [esp-bridge/main/config.h](../esp-bridge/main/config.h) on your PC:
-
-```c
-#define WIFI_PASSWORD    "your-real-password"   // must match hostapd.conf
-
-// Set the Pi's wlan0 MAC from Step 7:
-#define AP_BSSID         {0xdc, 0xa6, 0x32, 0xx, 0xx, 0xx}
-#define AP_BSSID_SET     true
-
-// Confirm channel matches hostapd.conf:
-#define WIFI_CHANNEL     36
-
-// Confirm the static IP matches the dnsmasq lease you'll add in Step 9:
-#define STATIC_IP        "192.168.42.11"   // (or .12, .13 for other boards)
-```
-
-Then flash each XIAO that's connected to an MCU board:
-
-1. Hold BOOT on the XIAO, tap RESET, release BOOT
-2. Run **Upload** in PlatformIO
-3. After flashing, the XIAO will reset and attempt to connect to the AP
-
----
-
-## Step 9 — Add static DHCP leases
-
-Once a board connects, find its MAC via dnsmasq's lease file:
+Open the dnsmasq config on the Pi:
 
 ```bash
-cat /var/lib/misc/dnsmasq.leases
-# Format: <expiry> <mac> <ip> <hostname> <client-id>
+nano ~/KlipperESPwifi/pi-host/dnsmasq/dnsmasq.conf
 ```
 
-Add a static lease for each board in [pi-host/dnsmasq/dnsmasq.conf](../pi-host/dnsmasq/dnsmasq.conf):
+Find the commented-out static lease lines and add your board's MAC:
 
 ```
-dhcp-host=aa:bb:cc:dd:ee:11,mcu-toolhead,192.168.42.11
-dhcp-host=aa:bb:cc:dd:ee:12,mcu-aux,192.168.42.12
+dhcp-host=aa:bb:cc:dd:ee:ff,mcu-toolhead,192.168.42.11
 ```
 
-Then deploy and restart:
+Replace `aa:bb:cc:dd:ee:ff` with the actual MAC from Step 6.  
+The IP `192.168.42.11` must match `STATIC_IP` in the board's `config.h`.
+
+Save the file (`Ctrl+O`, `Ctrl+X`), then deploy it:
 
 ```bash
 sudo cp ~/KlipperESPwifi/pi-host/dnsmasq/dnsmasq.conf /etc/dnsmasq.conf
 sudo systemctl restart dnsmasq
 ```
 
-Verify connectivity from the Pi:
+The board will renew its DHCP lease and get the static IP within 30 seconds (or power-cycle it). Confirm:
 
 ```bash
 ping -c 3 192.168.42.11
 ```
 
+You should get replies. If not, power-cycle the MCU board and try again.
+
 ---
 
-## Step 10 — Klipper configuration
+## Step 8 — (Optional) Pin the BSSID for faster reconnect
 
-Add to your `printer.cfg`:
+By telling the MCU firmware the Pi's exact WiFi MAC, the boards skip scanning and reconnect faster after a reset (from ~4 s down to ~1 s).
+
+Get the Pi's wlan0 MAC:
+
+```bash
+ip link show wlan0 | grep ether
+# Example: link/ether dc:a6:32:12:34:56 brd ff:ff:ff:ff:ff:ff
+```
+
+**On your PC**, edit [esp-bridge/main/config.h](../esp-bridge/main/config.h):
+
+```c
+#define AP_BSSID     {0xdc, 0xa6, 0x32, 0x12, 0x34, 0x56}
+#define AP_BSSID_SET true
+```
+
+Re-flash the MCU-side XIAO (BOOT + RESET + Upload). Only bother with this after everything is working.
+
+---
+
+## Step 9 — Add to Klipper
+
+The config snippet is already in this repo at [klipper-config/mcu-wifi.cfg](../klipper-config/mcu-wifi.cfg). Copy or symlink it into your Klipper config directory, then add to `printer.cfg`:
 
 ```ini
 [include mcu-wifi.cfg]
 ```
 
-Or reference the socket directly. The [klipper-config/mcu-wifi.cfg](../klipper-config/mcu-wifi.cfg) snippet:
+Or add the socket reference directly:
 
 ```ini
 [mcu toolhead]
 serial: socket://192.168.42.11:23
 restart_method: command
-
-[mcu aux]
-serial: socket://192.168.42.12:23
-restart_method: command
 ```
 
-Restart Klipper and check its log:
+Restart Klipper and check the log:
 
 ```bash
 sudo journalctl -u klipper -f
-# Look for "mcu toolhead: connected" without errors
+# Look for: MCU 'toolhead' is now ready
 ```
 
 ---
 
 ## Troubleshooting
 
-### wlan0 not appearing after reboot
-- `lsmod | grep esp` — if empty, module did not load. Re-run `./setup-esp-hosted.sh`
-- `ls /dev/spidev*` — if missing, SPI overlay not applied. Check `/boot/firmware/config.txt` for `dtparam=spi=on`, then reboot
-- `dmesg | grep -E 'esp|spi'` — look for probe errors
+### wlan0 disappears after reboot
+The SPI module is not auto-loading. Re-run `./setup-esp-hosted.sh` — it rebuilds and reloads the module.
 
-### hostapd fails to start
-- `sudo journalctl -u hostapd -n 50` — common cause: another process owns `wlan0`
-- `sudo nmcli dev status` — if wlan0 shows "connected", run `sudo nmcli dev set wlan0 managed no`
-- Check that `wpa_passphrase` is set (not `CHANGE_ME`) in `/etc/hostapd/hostapd.conf`
+### hostapd: "Failed to set beacon parameters"
+`wlan0` exists but ESP-Hosted is not fully initialised. Check:
+```bash
+dmesg | grep -E 'esp|spi' | tail -20
+```
+Look for SPI timeout or GPIO errors — usually a wiring issue.
 
-### MCU board not connecting
-- Check WIFI_PASSWORD in `config.h` matches `hostapd.conf`
-- Check WIFI_CHANNEL matches
-- Confirm `AP_BSSID_SET = false` for initial testing — enable pinning only after confirming it connects
-- ESP-IDF logs: connect XIAO to PC USB while powered from MCU, open serial monitor at 115200
+### MCU board connects but gets a dynamic IP, not 192.168.42.11
+The static lease in `dnsmasq.conf` doesn't match its MAC. Double-check Step 7 — MACs are case-sensitive in dnsmasq.
 
-### Klipper "Unable to connect" on socket://
-- `ping 192.168.42.11` from Pi — if no reply, board not connected to AP yet
-- Check bridge is listening: from Pi, `telnet 192.168.42.11 23` (type a byte — STM32 echo if MCU connected)
-- Confirm port 23 is not firewalled: `sudo iptables -L INPUT -n | grep 23`
+### Klipper says "Unable to connect" / socket timeout
+```bash
+ping -c 3 192.168.42.11      # must reply first
+telnet 192.168.42.11 23      # should open a connection (close with Ctrl+])
+```
+If ping works but telnet doesn't, the bridge firmware is not running — check serial monitor at 115200 baud (connect XIAO USB to PC while MCU board is powered).
 
-### Static IP not persisting after reboot
-- `ip addr show wlan0` — if address is missing, the NetworkManager profile may not have applied
-- Re-run `./setup-ap.sh` or manually: `sudo nmcli con up wlan0-static`
+### Static IP on wlan0 lost after reboot
+```bash
+sudo nmcli con up wlan0-static
+```
+If that fails, re-run `./setup-ap.sh`.
+
+### Everything worked once but broke after a Pi OS update
+A kernel update can invalidate the compiled `esp32_spi` module. Re-run `./setup-esp-hosted.sh` to rebuild it against the new kernel headers.
 
 ---
 
-## Maintenance notes
+## Maintenance
 
-- **Platform patches will be lost on `pio pkg update`** for the `espressif32` platform. If PlatformIO updates the platform and builds break, re-apply the patches documented in the relevant commit / save them to a separate script.
-- **hostapd.conf and dnsmasq.conf** in `pi-host/` are the source of truth. After editing them on your PC, re-run the copy commands in Step 9 or re-run `setup-ap.sh`.
-- **BSSID pinning** (`AP_BSSID_SET = true`) significantly speeds up reconnect after an MCU reset. Set it for production once the Pi MAC is stable.
+- **Source of truth for configs:** edit files under `pi-host/` in this repo on your PC, then copy to the Pi and restart the relevant service.
+- **Adding more MCU boards:** repeat Steps 6–7 for each board, using `.12`, `.13` etc. as the static IP. Flash each XIAO with a different `STATIC_IP` in `config.h`.
+- **Klipper firmware updates on the STM32:** use the `restart_method: command` in `mcu-wifi.cfg` — Klipper will reset the STM32 via the bridge's GPIO control of NRST.

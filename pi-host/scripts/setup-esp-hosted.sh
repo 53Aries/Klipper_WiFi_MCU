@@ -6,7 +6,7 @@ set -e
 
 echo "=== Installing build dependencies ==="
 sudo apt update
-sudo apt install -y git build-essential "linux-headers-$(uname -r)"
+sudo apt install -y git build-essential device-tree-compiler "linux-headers-$(uname -r)"
 
 echo "=== Enabling SPI in /boot/firmware/config.txt ==="
 CONFIG=/boot/firmware/config.txt
@@ -30,13 +30,22 @@ else
     git -C esp-hosted submodule update --init --recursive
 fi
 
-echo "=== Disabling spidev on SPI0 (nospi10 overlay) ==="
-# Pi 5 enables spidev on SPI bus 10 (the 40-pin SPI0) by default.
-# The official nospi10 overlay removes that device so esp32_spi can claim it.
-# Remove any leftover spidev-disabler entries from a previous version of this script.
-sudo sed -i '/^dtoverlay=spidev-disabler/d' "$CONFIG"
-if ! grep -q "dtoverlay=nospi10" "$CONFIG"; then
-    echo "dtoverlay=nospi10" | sudo tee -a "$CONFIG"
+echo "=== Installing spidev-disabler boot overlay ==="
+# Pi 5 has spidev bound to spi10 (SPI0 on the 40-pin header) by default.
+# nospi10 kills the whole bus controller — we need to disable only the spidev
+# child device, leaving the spi10 bus alive for esp32_spi to claim.
+# The base DT exports &spidev10 (confirmed via /proc/device-tree/__symbols__).
+# Remove any leftover nospi10 entries from a previous script version.
+sudo sed -i '/^dtoverlay=nospi10/d' "$CONFIG"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DTBO_DEST="/boot/firmware/overlays/spidev-disabler.dtbo"
+dtc "$SCRIPT_DIR/spidev-disabler.dts" -O dtb -o /tmp/spidev-disabler.dtbo 2>/dev/null
+if ! cmp -s /tmp/spidev-disabler.dtbo "$DTBO_DEST" 2>/dev/null; then
+    sudo cp /tmp/spidev-disabler.dtbo "$DTBO_DEST"
+    REBOOT_NEEDED=1
+fi
+if ! grep -q "dtoverlay=spidev-disabler" "$CONFIG"; then
+    echo "dtoverlay=spidev-disabler" | sudo tee -a "$CONFIG"
     REBOOT_NEEDED=1
 fi
 

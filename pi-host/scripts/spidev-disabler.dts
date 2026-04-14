@@ -1,0 +1,21 @@
+/dts-v1/;
+/plugin/;
+
+/*
+ * Disable only the spidev child device on SPI bus 10 (Pi 5 SPI0 on the 40-pin
+ * header).  The &spidev10 symbol is exported by the Pi 5 base device tree
+ * (confirmed via /proc/device-tree/__symbols__/spidev10).
+ *
+ * This leaves the spi10 bus controller itself alive so the esp32_spi kernel
+ * module can claim it, while preventing the spidev driver from binding first.
+ */
+/ {
+	compatible = "brcm,bcm2712";
+
+	fragment@0 {
+		target = <&spidev10>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+};

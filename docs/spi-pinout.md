@@ -8,21 +8,23 @@ plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
 ## Wiring Table
 
-Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except SPI CS, which is fixed to GPIO 8 / pin 24 (right column) by the Pi's SPI0 hardware.
+Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except SPI CS (pin 24) and 5V power (pin 4), both on the right column.
 
 | Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | XIAO GPIO | XIAO Pad | Direction  |
 |-------------|----------|-------------------|-------|-----------|----------|------------|
+| 5V          | —        | Pin 4             | Right | —         | VBUS     | Pi → XIAO  |
 | GND         | GND      | Pin 9             | Left  | GND       | GND      | —          |
 | Reset       | BCM 17   | Pin 11            | Left  | RST / EN  | RESET    | Pi → XIAO  |
 | DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4    | MTCK     | XIAO → Pi  |
 | Handshake   | BCM 22   | Pin 15            | Left  | GPIO 3    | MTDI     | XIAO → Pi  |
-| 3.3V        | 3V3      | Pin 17            | Left  | 3V3       | 3V3      | Pi → XIAO  |
 | SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3       | Pi → XIAO  |
 | SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS     | XIAO → Pi  |
 | SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT | Pi → XIAO  |
 | SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10/MOSI | Pi → XIAO  |
 
-> ⚠ **Pin 24 (CS) is the only right-side wire.** SPI0 CE0 is fixed to GPIO 8 by the Pi's hardware — it cannot be moved without a custom device tree overlay.
+> **Power note:** The XIAO's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → XIAO VBUS. The onboard regulator steps it down to 3.3V internally.
+
+> ⚠ **Pin 24 (CS) is the only SPI wire on the right side.** SPI0 CE0 is fixed to GPIO 8 by the Pi's hardware — it cannot be moved without a custom device tree overlay.
 
 ---
 

@@ -43,19 +43,21 @@ Do both of these on your Windows PC **before** touching the Pi.
 
 The XIAO connects to the Pi via SPI. Use the Pi's **3.3 V rail** — do not use 5 V.
 
-Almost all wires land on the **left column** of the header (odd pins). Pin 24 (CS) is the only right-side wire — it's fixed by the Pi's SPI0 hardware.
+Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V) and Pin 24 (CS) are the only right-side wires.
 
 | Pi physical pin | Side  | Signal     | XIAO pad |
-|-----------------|-------|------------|-----------|
+|-----------------|-------|------------|----------|
+| Pin 4           | Right | 5V         | VBUS     |
 | Pin 9           | Left  | GND        | GND      |
 | Pin 11          | Left  | Reset      | RST      |
 | Pin 13          | Left  | Data Ready | IO4      |
 | Pin 15          | Left  | Handshake  | IO3      |
-| Pin 17          | Left  | 3.3 V      | 3V3      |
 | Pin 19          | Left  | SPI0 MOSI  | IO7      |
 | Pin 21          | Left  | SPI0 MISO  | IO2      |
 | Pin 23          | Left  | SPI0 SCLK  | IO6      |
-| Pin 24          | **Right** | SPI0 CS | IO10   |
+| Pin 24          | **Right** | SPI0 CS | IO10  |
+
+> The XIAO's 3V3 pin is regulator **output** only — do not connect it to the Pi. Use VBUS (accepts 5V input, feeds the onboard regulator).
 
 Full details with signal directions and driver GPIO numbers: [docs/spi-pinout.md](spi-pinout.md)
 

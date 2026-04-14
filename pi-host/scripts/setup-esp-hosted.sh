@@ -21,9 +21,11 @@ fi
 echo "=== Cloning ESP-Hosted ==="
 cd ~
 if [ ! -d esp-hosted ]; then
-    git clone --depth 1 https://github.com/espressif/esp-hosted.git
+    git clone --depth 1 --recurse-submodules --shallow-submodules \
+        https://github.com/espressif/esp-hosted.git
 else
     git -C esp-hosted pull --ff-only
+    git -C esp-hosted submodule update --init --recursive
 fi
 
 echo "=== Building kernel module (SPI, ESP32-C5) ==="

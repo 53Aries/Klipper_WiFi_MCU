@@ -10,16 +10,11 @@ sudo apt install -y git build-essential device-tree-compiler "linux-headers-$(un
 
 echo "=== Enabling SPI in /boot/firmware/config.txt ==="
 CONFIG=/boot/firmware/config.txt
-# Remove old spi0-0cs overlay if present (previous script version).
+# Pi 5 has SPI0 and spidev@0 active by default — dtparam=spi=on is not needed
+# and is removed if a previous script version added it.
+sudo sed -i '/^dtparam=spi=on/d' "$CONFIG"
 sudo sed -i '/^dtoverlay=spi0-0cs/d' "$CONFIG"
 REBOOT_NEEDED=0
-# dtparam=spi=on enables SPI0 with CS GPIOs (GPIO8=CE0, GPIO7=CE1).
-# We also install a boot-time overlay (spidev-disabler) below that prevents
-# the spidev driver from claiming CE0, leaving it free for esp32_spi.
-if ! grep -q "dtparam=spi=on" "$CONFIG"; then
-    echo "dtparam=spi=on" | sudo tee -a "$CONFIG"
-    REBOOT_NEEDED=1
-fi
 # Disable Bluetooth to free up UART if needed
 if ! grep -q "dtoverlay=disable-bt" "$CONFIG"; then
     echo "dtoverlay=disable-bt" | sudo tee -a "$CONFIG"
@@ -36,17 +31,16 @@ else
 fi
 
 echo "=== Installing spidev-disabler boot overlay ==="
-# spidev_disabler.dts disables the spidev@0 DT node at boot time, preventing
-# the spidev driver from binding to SPI0 CE0 before esp32_spi loads.
-# Setting status=disabled at runtime (what rpi_init.sh does) has no effect
-# because spidev has already bound; doing it at boot prevents binding entirely.
-DTS_SRC="$HOME/esp-hosted/esp_hosted_fg/host/linux/host_control/spidev_disabler.dts"
+# Pi 5 firmware silently skips overlays whose compatible doesn't match.
+# The esp-hosted spidev_disabler.dts uses brcm,bcm2708 (wrong for Pi 5).
+# We supply spidev-disabler.dts with brcm,bcm2712 so it actually fires at boot.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DTBO_DEST="/boot/firmware/overlays/spidev-disabler.dtbo"
-if [ ! -f "$DTBO_DEST" ]; then
-    dtc "$DTS_SRC" -O dtb -o /tmp/spidev-disabler.dtbo 2>/dev/null
+dtc "$SCRIPT_DIR/spidev-disabler.dts" -O dtb -o /tmp/spidev-disabler.dtbo 2>/dev/null
+if ! cmp -s /tmp/spidev-disabler.dtbo "$DTBO_DEST" 2>/dev/null; then
     sudo cp /tmp/spidev-disabler.dtbo "$DTBO_DEST"
+    REBOOT_NEEDED=1
 fi
-# dtoverlay=spidev-disabler must come after dtparam=spi=on in config.txt
 if ! grep -q "dtoverlay=spidev-disabler" "$CONFIG"; then
     echo "dtoverlay=spidev-disabler" | sudo tee -a "$CONFIG"
     REBOOT_NEEDED=1

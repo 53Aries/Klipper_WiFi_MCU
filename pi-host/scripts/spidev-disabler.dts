@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0
+// Disable the spidev@0 device tree node on Pi 5 at boot time so that the
+// spidev driver does not bind to SPI0 CE0, leaving it free for esp32_spi.
+//
+// The esp-hosted spidev_disabler.dts uses compatible = "brcm,bcm2708" which
+// the Pi 5 firmware silently skips (Pi 5 reports brcm,bcm2712). This file
+// uses the correct compatible string so the overlay is actually applied.
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "brcm,bcm2712";
+
+    fragment@0 {
+        target = <&spidev0>;
+        __overlay__ {
+            status = "disabled";
+        };
+    };
+};

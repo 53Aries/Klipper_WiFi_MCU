@@ -20,11 +20,11 @@ Signals are ordered by physical pin number. All wires land on the **left (odd) c
 | SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3       | Pi → XIAO  |
 | SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS     | XIAO → Pi  |
 | SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT | Pi → XIAO  |
-| SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10/MOSI | Pi → XIAO  |
+| SPI CS      | BCM 7    | Pin 26 ⚠          | Right | GPIO 10   | D10/MOSI | Pi → XIAO  |
 
 > **Power note:** The XIAO's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → XIAO VBUS. The onboard regulator steps it down to 3.3V internally.
 
-> ⚠ **Pin 24 (CS) is the only SPI wire on the right side.** SPI0 CE0 is fixed to GPIO 8 by the Pi's hardware — it cannot be moved without a custom device tree overlay.
+> ⚠ **Pin 26 (CS) is the only SPI wire on the right side.** We use SPI0 CE1 (GPIO 7, pin 26) because CE0 (pin 24) is permanently claimed by the RP1 spidev driver on Pi 5 and cannot be freed at runtime.
 
 ---
 
@@ -38,7 +38,7 @@ spi-handshake=534   # BCM 22 + 512  (Pin 15)
 spi-dataready=539   # BCM 27 + 512  (Pin 13)
 ```
 
-SPI bus: `/dev/spidev0.0` (SPI0, CE0)
+SPI bus: SPI0, CE1 (`spi_bus=10 spi_cs=1` — CE0 is reserved by the RP1 spidev driver on Pi 5)
 
 ---
 

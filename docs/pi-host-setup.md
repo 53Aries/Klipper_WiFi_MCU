@@ -55,7 +55,7 @@ Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V
 | Pin 19          | Left  | SPI0 MOSI  | IO7      |
 | Pin 21          | Left  | SPI0 MISO  | IO2      |
 | Pin 23          | Left  | SPI0 SCLK  | IO6      |
-| Pin 24          | **Right** | SPI0 CS | IO10  |
+| Pin 26          | **Right** | SPI0 CS | IO10  |
 
 > The XIAO's 3V3 pin is regulator **output** only — do not connect it to the Pi. Use VBUS (accepts 5V input, feeds the onboard regulator).
 

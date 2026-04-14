@@ -50,7 +50,7 @@ cd "$HOST_DIR"
 #   spi-handshake=534 → BCM GPIO22 (physical pin 15) → C5 IO3
 #   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
-    spi-bus=10 resetpin=529 spi-handshake=534 spi-dataready=539 || {
+    spi-bus=10 spi-cs=1 resetpin=529 spi-handshake=534 spi-dataready=539 || {
     if [ "$REBOOT_NEEDED" -eq 1 ]; then
         echo ""
         echo "NOTE: Module built OK but SPI hardware is not active until after a reboot."
@@ -66,7 +66,7 @@ echo "=== SPI GPIO pinout (Pi 5 physical pins → ESP32-C5) ==="
 echo "  Pin 19 (GPIO10 SPI0 MOSI) → IO7"
 echo "  Pin 21 (GPIO9  SPI0 MISO) → IO2"
 echo "  Pin 23 (GPIO11 SPI0 SCLK) → IO6"
-echo "  Pin 24 (GPIO8  SPI0 CE0)  → IO10"
+echo "  Pin 26 (GPIO7  SPI0 CE1)  → IO10"
 echo "  Pin 25 (GND)              → GND"
 echo "  Pin 13 (GPIO27 / #539)    → IO4  (Data Ready)"
 echo "  Pin 15 (GPIO22 / #534)    → IO3  (Handshake)"

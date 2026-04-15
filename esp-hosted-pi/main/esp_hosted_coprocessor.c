@@ -47,6 +47,7 @@
 #include "example_http_client.h"
 #endif
 #include "esp_wifi.h"
+#include "led_strip.h"
 
 #if CONFIG_NETWORK_SPLIT_ENABLED
 	#include "host_power_save.h"
@@ -81,29 +82,44 @@ volatile uint8_t datapath = 0;
 volatile uint8_t station_connected = 0;
 volatile uint8_t host_active = 0;  /* set only when Pi kernel driver opens data path */
 
-/* ── Status LED ──────────────────────────────────────────────────────────
- * GPIO27 = onboard LED on both the XIAO ESP32-C5 and the DevKit V2.0
- *   Booting (no Pi kernel driver)    : fast blink (100 ms)
- *   Pi driver loaded, not yet active : slow blink (500 ms)
- *   Pi kernel driver active          : steady on
+/* ── Status LED (addressable RGB, e.g. WS2812) ──────────────────────────
+ * GPIO27 = onboard RGB LED on both the XIAO ESP32-C5 and the DevKit V2.0
+ * Driven via the RMT peripheral using ESP-IDF's led_strip component.
+ *
+ *   Booting (no Pi kernel driver)    : fast blink RED    (100 ms)
+ *   Pi driver loaded, not yet active : slow blink BLUE   (500 ms)
+ *   Pi kernel driver active          : steady GREEN
  * ────────────────────────────────────────────────────────────────────── */
 #define STATUS_LED_GPIO  27
 
-/* LED is active-low: gpio LOW = on, gpio HIGH = off */
-#define LED_ON()   gpio_set_level(STATUS_LED_GPIO, 0)
-#define LED_OFF()  gpio_set_level(STATUS_LED_GPIO, 1)
+static led_strip_handle_t led_strip;
+
+static void led_set(uint8_t r, uint8_t g, uint8_t b)
+{
+    led_strip_set_pixel(led_strip, 0, r, g, b);
+    led_strip_refresh(led_strip);
+}
+
+static void led_off(void)
+{
+    led_strip_clear(led_strip);
+}
 
 static void status_led_init(void)
 {
-    gpio_config_t cfg = {
-        .pin_bit_mask = (1ULL << STATUS_LED_GPIO),
-        .mode         = GPIO_MODE_OUTPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
+    led_strip_config_t strip_config = {
+        .strip_gpio_num  = STATUS_LED_GPIO,
+        .max_leds        = 1,
+        .led_model       = LED_MODEL_WS2812,
+        .flags.invert_out = false,
     };
-    gpio_config(&cfg);
-    LED_OFF();
+    led_strip_rmt_config_t rmt_config = {
+        .clk_src       = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = 10 * 1000 * 1000,  /* 10 MHz */
+        .flags.with_dma = false,
+    };
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
+    led_off();
 }
 
 static void status_led_task(void *arg)
@@ -111,20 +127,20 @@ static void status_led_task(void *arg)
     status_led_init();
     for (;;) {
         if (host_active) {
-            /* Pi kernel driver active — steady on */
-            LED_ON();
+            /* Pi kernel driver active — steady green */
+            led_set(0, 32, 0);
             vTaskDelay(pdMS_TO_TICKS(200));
         } else if (datapath) {
-            /* SPI init done, waiting for Pi kernel driver — slow blink */
-            LED_ON();
+            /* SPI init done, waiting for Pi kernel driver — slow blink blue */
+            led_set(0, 0, 32);
             vTaskDelay(pdMS_TO_TICKS(500));
-            LED_OFF();
+            led_off();
             vTaskDelay(pdMS_TO_TICKS(500));
         } else {
-            /* booting / no SPI host yet — fast blink */
-            LED_ON();
+            /* booting / no SPI host yet — fast blink red */
+            led_set(32, 0, 0);
             vTaskDelay(pdMS_TO_TICKS(100));
-            LED_OFF();
+            led_off();
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }

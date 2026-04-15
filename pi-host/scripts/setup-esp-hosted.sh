@@ -72,7 +72,7 @@ cd "$HOST_DIR"
 # Module parameters for Pi 5 wiring
 MOD_PARAMS="resetpin=529 spi_bus=10 spi_cs=0 spi_mode=3 spi_handshake=536 spi_dataready=539 clockspeed=10"
 MOD_NAME="esp32_spi"
-KO_SRC="$HOME/esp-hosted/esp_hosted_fg/host/linux/host_driver/esp32/spi/esp32_spi.ko"
+KO_DIR="$HOME/esp-hosted/esp_hosted_fg/host/linux/host_driver/esp32"
 
 # Build the module via rpi_init.sh (it compiles and does a one-shot insmod)
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
@@ -88,6 +88,14 @@ KO_SRC="$HOME/esp-hosted/esp_hosted_fg/host/linux/host_driver/esp32/spi/esp32_sp
 }
 
 echo "=== Installing module for persistent boot loading ==="
+# Find the compiled .ko — build may put it in esp32/ or esp32/spi/
+KO_SRC=$(find "$KO_DIR" -name "${MOD_NAME}.ko" -print -quit 2>/dev/null)
+if [ -z "$KO_SRC" ]; then
+    echo "ERROR: Could not find ${MOD_NAME}.ko under $KO_DIR"
+    echo "Check build output above for errors."
+    exit 1
+fi
+echo "Found module: $KO_SRC"
 # Copy the compiled .ko into the kernel's extra modules directory
 KVER="$(uname -r)"
 EXTRA_DIR="/lib/modules/${KVER}/extra"

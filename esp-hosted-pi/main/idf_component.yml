@@ -1,4 +1,6 @@
 dependencies:
+  espressif/led_strip:
+    version: "~2.5.0"
   cmd_system:
     path: ${IDF_PATH}/examples/system/console/advanced/components/cmd_system
     rules:

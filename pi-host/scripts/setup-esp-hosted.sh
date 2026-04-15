@@ -60,23 +60,41 @@ if [ ! -f "$HOST_DIR/rpi_init.sh" ]; then
 fi
 cd "$HOST_DIR"
 
-# GPIO numbers below are Pi 5 Linux GPIO numbers (BCM + 512 offset for RP1).
-# These match our wiring:
-#   resetpin=529      → BCM GPIO17 (physical pin 11) → C5 RST
-#   spi-handshake=536 → BCM GPIO24 (physical pin 18) → C5 IO3
-#   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
-# NOTE: BCM22 (pin 15) is permanently claimed by spi10 cs-gpios (2712_BOOT_CS_N).
-#       BCM23 (pin 16) has a hardware pull-up (2712_BOOT_MISO) that holds the
-#       line HIGH permanently, preventing the driver from seeing rising edges.
+# Auto-detect the RP1 GPIO base offset.
+# On Bookworm this was 512, on Trixie it moved to 569.
+# The RP1 chip is labeled "pinctrl-rp1" and has 54 lines.
+RP1_BASE=""
+for chip in /sys/class/gpio/gpiochip*/; do
+    label=$(cat "$chip/label" 2>/dev/null)
+    ngpio=$(cat "$chip/ngpio" 2>/dev/null)
+    if [ "$label" = "pinctrl-rp1" ] && [ "$ngpio" = "54" ]; then
+        RP1_BASE=$(cat "$chip/base")
+        break
+    fi
+done
+if [ -z "$RP1_BASE" ]; then
+    echo "ERROR: Could not find RP1 GPIO chip (pinctrl-rp1). Is this a Pi 5?"
+    exit 1
+fi
+echo "=== Detected RP1 GPIO base: $RP1_BASE ==="
+
+# BCM GPIO numbers for our wiring (add RP1_BASE to get Linux GPIO number):
+#   BCM17 (pin 11) → RST          BCM24 (pin 18) → Handshake (IO3)
+#   BCM27 (pin 13) → DataReady (IO4)
+RESETPIN=$((RP1_BASE + 17))
+HANDSHAKE=$((RP1_BASE + 24))
+DATAREADY=$((RP1_BASE + 27))
+
+echo "  resetpin=$RESETPIN  handshake=$HANDSHAKE  dataready=$DATAREADY"
 
 # Module parameters for Pi 5 wiring
-MOD_PARAMS="resetpin=529 spi_bus=10 spi_cs=0 spi_mode=3 spi_handshake=536 spi_dataready=539 clockspeed=10"
+MOD_PARAMS="resetpin=${RESETPIN} spi_bus=10 spi_cs=0 spi_mode=3 spi_handshake=${HANDSHAKE} spi_dataready=${DATAREADY} clockspeed=10"
 MOD_NAME="esp32_spi"
 KO_DIR="$HOME/esp-hosted/esp_hosted_fg/host/linux/host_driver/esp32"
 
 # Build the module via rpi_init.sh (it compiles and does a one-shot insmod)
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
-    spi-bus=10 spi-cs=0 resetpin=529 spi-handshake=536 spi-dataready=539 || {
+    spi-bus=10 spi-cs=0 resetpin=$RESETPIN spi-handshake=$HANDSHAKE spi-dataready=$DATAREADY || {
     if [ "$REBOOT_NEEDED" -eq 1 ]; then
         echo ""
         echo "NOTE: Module built OK but SPI hardware is not active until after a reboot."
@@ -105,7 +123,8 @@ sudo depmod -a
 
 # Set default module parameters so modprobe loads with our Pi 5 GPIO config
 sudo tee /etc/modprobe.d/esp32-spi.conf > /dev/null <<EOF
-# ESP-Hosted SPI module parameters for Pi 5 + XIAO ESP32-C5
+# ESP-Hosted SPI module parameters for Pi 5 + ESP32-C5
+# RP1 GPIO base auto-detected as $RP1_BASE (BCM + $RP1_BASE)
 options esp32_spi ${MOD_PARAMS}
 EOF
 
@@ -116,14 +135,15 @@ fi
 
 echo ""
 echo "=== SPI GPIO pinout (Pi 5 physical pins → ESP32-C5) ==="
-echo "  Pin 19 (GPIO10 SPI0 MOSI) → IO7"
-echo "  Pin 21 (GPIO9  SPI0 MISO) → IO2"
-echo "  Pin 23 (GPIO11 SPI0 SCLK) → IO6"
-echo "  Pin 24 (GPIO8  SPI0 CE0)  → IO10"
-echo "  Pin 9  (GND)              → GND"
-echo "  Pin 13 (GPIO27 / #539)    → IO4  (Data Ready)"
-echo "  Pin 18 (GPIO24 / #536)    → IO3  (Handshake)"
-echo "  Pin 11 (GPIO17 / #529)    → RST"
+echo "  RP1 GPIO base: $RP1_BASE"
+echo "  Pin 19 (BCM10 SPI0 MOSI) → GPIO7"
+echo "  Pin 21 (BCM9  SPI0 MISO) → GPIO2"
+echo "  Pin 23 (BCM11 SPI0 SCLK) → GPIO6"
+echo "  Pin 24 (BCM8  SPI0 CE0)  → GPIO10"
+echo "  Pin 9  (GND)             → GND"
+echo "  Pin 13 (BCM27 / #$DATAREADY)  → GPIO4  (Data Ready)"
+echo "  Pin 18 (BCM24 / #$HANDSHAKE)  → GPIO3  (Handshake)"
+echo "  Pin 11 (BCM17 / #$RESETPIN)   → RST"
 echo ""
 echo "=== Done ==="
 echo "The esp32_spi module will auto-load on every boot with the correct parameters."

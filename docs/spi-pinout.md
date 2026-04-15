@@ -36,12 +36,16 @@ All DevKit connections use **edge connector pins** — no bottom-pad soldering.
 
 ## Linux Driver Parameters (Pi 5 / RP1)
 
-Pi 5 GPIOs are addressed as `BCM + 512` due to the RP1 I/O controller offset:
+Pi 5 GPIOs are addressed as `BCM + RP1_BASE`. The base offset varies by OS version:
+- **Bookworm**: RP1_BASE = 512
+- **Trixie**: RP1_BASE = 569
+
+The `setup-esp-hosted.sh` script **auto-detects** the base by scanning `/sys/class/gpio/` for the `pinctrl-rp1` chip. Example with Trixie (base 569):
 
 ```
-resetpin=529        # BCM 17 + 512  (Pin 11)
-spi-handshake=536   # BCM 24 + 512  (Pin 18)
-spi-dataready=539   # BCM 27 + 512  (Pin 13)
+resetpin=586        # BCM 17 + 569  (Pin 11)
+spi-handshake=593   # BCM 24 + 569  (Pin 18)
+spi-dataready=596   # BCM 27 + 569  (Pin 13)
 ```
 
 SPI bus: SPI0, CE0 (`spi_bus=10 spi_cs=0` — CE0 is freed at boot by the `spidev-disabler` overlay)

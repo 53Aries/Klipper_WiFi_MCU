@@ -82,13 +82,10 @@ volatile uint8_t station_connected = 0;
 volatile uint8_t host_active = 0;  /* set only when Pi kernel driver opens data path */
 
 /* ── Status LED ──────────────────────────────────────────────────────────
- * GPIO27 — on XIAO this was the onboard USER_LED (yellow, active-low).
- * On the ESP32-C5 DevKit V2.0, GPIO27 is an edge pin with no onboard LED.
- * You can optionally wire an LED+resistor between GPIO27 and GND to see:
+ * GPIO27 = onboard LED on both the XIAO ESP32-C5 and the DevKit V2.0
  *   Booting (no Pi kernel driver)    : fast blink (100 ms)
  *   Pi driver loaded, not yet active : slow blink (500 ms)
  *   Pi kernel driver active          : steady on
- * If no LED is connected, this code is harmless (just toggles the pin).
  * ────────────────────────────────────────────────────────────────────── */
 #define STATUS_LED_GPIO  27
 

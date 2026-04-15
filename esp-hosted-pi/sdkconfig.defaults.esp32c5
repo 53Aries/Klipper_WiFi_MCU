@@ -37,10 +37,18 @@ CONFIG_ESP_WIFI_RX_IRAM_OPT=y
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
 # ── GPIO pins ─────────────────────────────────────────────────────────────
-# Use the native FSPI (SPI2) pin group on the ESP32-C5 DevKit V2.0:
-#   MOSI=IO7 (FSPID)   MISO=IO2 (FSPIQ)   CLK=IO6 (FSPICLK)   CS=IO10 (FSPICS0)
-#   Handshake=IO4 (FSPIHD)   DataReady=IO5 (FSPIWP)
+# IMPORTANT: On ESP32-C5, the MSPI (flash) controller permanently owns the
+# IO_MUX SPI2 pads (IO2, IO6, IO7, IO10) in DIO/QIO mode.  Using those for
+# the GP-SPI slave causes all-0xFF on MISO because flash wins the pin.
 #
-# The Kconfig defaults for C5 set Handshake=3 and DataReady=4 — override them.
+# GPIO11/12 = UART0 TX/RX, GPIO13/14 = USB D-/D+ — also unavailable.
+#
+# We route SPI2 through the GPIO matrix to free pins on the right side:
+#   MISO=IO23   MOSI=IO24   CLK=IO15   CS=IO28
+#   Handshake=IO4   DataReady=IO5
+CONFIG_ESP_SPI_HSPI_GPIO_MOSI=24
+CONFIG_ESP_SPI_HSPI_GPIO_MISO=23
+CONFIG_ESP_SPI_HSPI_GPIO_CLK=15
+CONFIG_ESP_SPI_HSPI_GPIO_CS=28
 CONFIG_ESP_SPI_GPIO_HANDSHAKE=4
 CONFIG_ESP_SPI_GPIO_DATA_READY=5

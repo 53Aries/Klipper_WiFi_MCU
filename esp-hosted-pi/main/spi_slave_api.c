@@ -533,11 +533,18 @@ static void queue_next_transaction(void)
 	}
 
 	spi_trans = spi_trans_alloc(MEMSET_REQUIRED);
-	assert(spi_trans);
+	if (!spi_trans) {
+		ESP_LOGW(TAG, "No free SPI transaction buffers, skipping");
+		return;
+	}
 
 	/* Use RX mempool instead of direct heap allocation */
 	uint8_t *rx_buffer = spi_buffer_rx_alloc(MEMSET_REQUIRED);
-	assert(rx_buffer);
+	if (!rx_buffer) {
+		ESP_LOGW(TAG, "No free RX buffers, skipping");
+		spi_trans_free(spi_trans);
+		return;
+	}
 
 	spi_trans->rx_buffer = rx_buffer;
 	spi_trans->tx_buffer = tx_buffer;

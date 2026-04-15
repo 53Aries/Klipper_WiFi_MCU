@@ -4,17 +4,24 @@ The pi-side ESP32-C5 DevKit acts as an SPI slave running ESP-Hosted firmware.
 The Pi is the SPI master. Six signals are required: the four standard SPI lines
 plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
-All six ESP GPIOs belong to the **native FSPI (SPI2) pin group** on the C5,
-giving the best signal integrity and IO_MUX routing:
+On ESP32-C5, the MSPI (flash) controller permanently owns the IO_MUX SPI2
+pads (IO2, IO6, IO7, IO10) even in DIO mode.  The GP-SPI (SPI2) slave cannot
+drive MISO through those pads — the Pi sees all 0xFF.
 
-| ESP GPIO | FSPI function | Signal      |
-|----------|---------------|-------------|
-| IO2      | FSPIQ         | MISO        |
-| IO4      | FSPIHD        | Handshake   |
-| IO5      | FSPIWP        | DataReady   |
-| IO6      | FSPICLK       | SCLK        |
-| IO7      | FSPID         | MOSI        |
-| IO10     | FSPICS0       | CS          |
+We route SPI2 through the **GPIO matrix** to non-flash GPIOs on the right side
+of the DevKit board:
+
+| ESP GPIO | Signal      | DevKit Side |
+|----------|-------------|-------------|
+| IO23     | MISO        | Right       |
+| IO24     | MOSI        | Right       |
+| IO15     | SCLK        | Right       |
+| IO28     | CS          | Right       |
+| IO4      | Handshake   | Right       |
+| IO5      | DataReady   | Right       |
+
+GPIO matrix routing adds negligible latency at SPI slave frequencies ≤ 60 MHz
+(ESP-IDF docs confirm identical behaviour vs IO_MUX at ≤ 80 MHz).
 
 ---
 
@@ -33,10 +40,10 @@ are on the left side.
 | Reset       | BCM 17   | Pin 11            | Left  | RST / EN    | Left        | Pi -> ESP  |
 | DataReady   | BCM 27   | Pin 13            | Left  | GPIO 5      | Right       | ESP -> Pi  |
 | Handshake   | BCM 24   | Pin 18            | Right | GPIO 4      | Right       | ESP -> Pi  |
-| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7      | Left        | Pi -> ESP  |
-| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2      | Left        | ESP -> Pi  |
-| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6      | Left        | Pi -> ESP  |
-| SPI CS      | BCM 8    | Pin 24            | Right | GPIO 10     | Left        | Pi -> ESP  |
+| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 24     | Right       | Pi -> ESP  |
+| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 23     | Right       | ESP -> Pi  |
+| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 15     | Right       | Pi -> ESP  |
+| SPI CS      | BCM 8    | Pin 24            | Right | GPIO 28     | Right       | Pi -> ESP  |
 
 > **Power note:** The devkit's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → DevKit 5V. The onboard regulator steps it down to 3.3V internally.
 
@@ -68,23 +75,28 @@ SPI bus: SPI0, CE0 (`spi_bus=10 spi_cs=0` — CE0 is freed at boot by the `spide
 
 ## ESP-Hosted Firmware Config Source
 
-The SPI bus pins use Kconfig defaults for `IDF_TARGET_ESP32C5` in
-`main/Kconfig.projbuild`:
-- MOSI=IO7, MISO=IO2, CLK=IO6, CS=IO10
+The SPI bus pins use GPIO matrix routing (not IO_MUX) to avoid the flash pin
+conflict.  They are overridden in `sdkconfig.defaults.esp32c5`:
+- `CONFIG_ESP_SPI_HSPI_GPIO_MOSI=24`
+- `CONFIG_ESP_SPI_HSPI_GPIO_MISO=23`
+- `CONFIG_ESP_SPI_HSPI_GPIO_CLK=15`
+- `CONFIG_ESP_SPI_HSPI_GPIO_CS=28`
 
-Handshake and DataReady are overridden in `sdkconfig.defaults.esp32c5` to use the
-remaining FSPI group pins instead of the Kconfig defaults (IO3, IO4):
+Handshake and DataReady are also overridden:
 - `CONFIG_ESP_SPI_GPIO_HANDSHAKE=4`
 - `CONFIG_ESP_SPI_GPIO_DATA_READY=5`
 
 ---
 
-## JTAG Note
+## JTAG / Flash Note
 
-GPIO2 (MTMS), GPIO4 (MTCK), and GPIO5 (MTDO) are shared with the ESP32-C5's
-pad-JTAG interface. When the SPI slave peripheral claims them (IO_MUX / GPIO
-matrix), JTAG is overridden. JTAG debugging is **not available** while the SPI
-link is in use.
+GPIO3 (MTDI), GPIO4 (MTCK), and GPIO5 (MTDO) are shared with the ESP32-C5's
+pad-JTAG interface. When the GPIO outputs claim them, JTAG is overridden.
+JTAG debugging is **not available** while the SPI link is in use.
+
+The MSPI (flash SPI0/SPI1) controller permanently owns IO2, IO6, IO7, IO10
+for flash data access (DIO mode).  These GPIOs **cannot** be used for the GP-SPI
+slave.  See the flash conflict note at the top of this file.
 
 ---
 

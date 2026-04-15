@@ -52,10 +52,10 @@ Almost all wires land on the **left column** of the Pi header (odd pins). Pin 4 
 | Pin 11          | Left  | Reset      | RST            |
 | Pin 13          | Left  | Data Ready | GPIO5          |
 | Pin 18          | Right | Handshake  | GPIO4          |
-| Pin 19          | Left  | SPI0 MOSI  | GPIO7          |
-| Pin 21          | Left  | SPI0 MISO  | GPIO2          |
-| Pin 23          | Left  | SPI0 SCLK  | GPIO6          |
-| Pin 24          | **Right** | SPI0 CS | GPIO10      |
+| Pin 19          | Left  | SPI0 MOSI  | GPIO24         |
+| Pin 21          | Left  | SPI0 MISO  | GPIO23         |
+| Pin 23          | Left  | SPI0 SCLK  | GPIO15         |
+| Pin 24          | **Right** | SPI0 CS | GPIO28      |
 
 All nine connections use the devkit’s edge connector pins — no bottom-pad soldering required.
 

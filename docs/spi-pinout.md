@@ -1,6 +1,6 @@
-# SPI Pinout — Pi 5 ↔ XIAO ESP32-C5 (esp-hosted-pi)
+# SPI Pinout — Pi 5 ↔ ESP32-C5 DevKit V2.0 (esp-hosted-pi)
 
-The Pi-side XIAO acts as an SPI slave running ESP-Hosted firmware.
+The pi-side ESP32-C5 DevKit acts as an SPI slave running ESP-Hosted firmware.
 The Pi is the SPI master. Six signals are required: the four standard SPI lines
 plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
@@ -8,23 +8,23 @@ plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
 ## Wiring Table
 
-Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except SPI CS (pin 24) and 5V power (pin 4), both on the right column.
+Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except 5V power (pin 4), Handshake (pin 18), and SPI CS (pin 24), which are on the right column.
 
-| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | XIAO GPIO | XIAO Pad      | Location          | Direction  |
-|-------------|----------|-------------------|-------|-----------|---------------|-------------------|------------|
-| 5V          | —        | Pin 4             | Right | —         | VBUS          | Edge connector    | Pi → XIAO  |
-| GND         | GND      | Pin 9             | Left  | GND       | GND           | Edge connector    | —          |
-| Reset       | BCM 17   | Pin 11            | Left  | RST / EN  | RESET         | Edge connector    | Pi → XIAO  |
-| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4    | MTCK ⚠        | **Bottom pad**    | XIAO → Pi  |
-| Handshake   | BCM 24   | Pin 18            | Right | GPIO 3    | MTDI ⚠        | **Bottom pad**    | XIAO → Pi  |
-| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3            | Edge connector    | Pi → XIAO  |
-| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS ⚠        | **Bottom pad**    | XIAO → Pi  |
-| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | D2            | Edge connector    | Pi → XIAO  |
-| SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10           | Edge connector    | Pi → XIAO  |
+All DevKit connections use **edge connector pins** — no bottom-pad soldering.
 
-> ⚠ **Three signals use pads on the BOTTOM of the XIAO, not edge connectors.** MTCK (IO4), MTDI (IO3), and MTMS (IO2) are small castellated pads on the board underside. Do NOT confuse them with edge connector pins like D3 or D4 — those are completely different GPIOs (D3 = GPIO7, D4 = GPIO23).
+| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | DevKit GPIO | Direction  |
+|-------------|----------|-------------------|-------|-------------|------------|
+| 5V          | —        | Pin 4             | Right | 5V          | Pi → ESP   |
+| GND         | GND      | Pin 9             | Left  | GND         | —          |
+| Reset       | BCM 17   | Pin 11            | Left  | RST / EN    | Pi → ESP   |
+| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4      | ESP → Pi   |
+| Handshake   | BCM 24   | Pin 18            | Right | GPIO 3      | ESP → Pi   |
+| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7      | Pi → ESP   |
+| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2      | ESP → Pi   |
+| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6      | Pi → ESP   |
+| SPI CS      | BCM 8    | Pin 24            | Right | GPIO 10     | Pi → ESP   |
 
-> **Power note:** The XIAO's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → XIAO VBUS. The onboard regulator steps it down to 3.3V internally.
+> **Power note:** The devkit's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → DevKit 5V. The onboard regulator steps it down to 3.3V internally.
 
 > ⚠ **Pin 15 (BCM22) and Pin 16 (BCM23) cannot be used for Handshake on Pi 5.**
 > - BCM22 is permanently claimed by the `spi10` controller as `cs-gpios` CS0 (`2712_BOOT_CS_N`) — requesting it causes `EBUSY`.
@@ -59,9 +59,9 @@ To change a pin, add the relevant `CONFIG_ESP_SPI_HSPI_GPIO_*` line to
 
 ---
 
-## ⚠ JTAG Conflict Note
+## ⚠ JTAG Note
 
-GPIO2, GPIO3, and GPIO4 are shared with the XIAO's JTAG interface
+GPIO2, GPIO3, and GPIO4 are shared with the ESP32-C5’s JTAG interface
 (MTMS, MTDI, MTCK respectively). JTAG debugging is **not available**
 while the SPI link is in use.
 

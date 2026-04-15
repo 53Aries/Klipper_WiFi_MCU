@@ -3,8 +3,8 @@
 
 # ── C5-specific hardware ───────────────────────────────────────────────────
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
-# XIAO has 8MB flash — override base default
-CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+# ESP32-C5 DevKit V2.0 (H4 module) has 4MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.esp32c5.csv"
 CONFIG_ESP_CACHE_MALLOC=y

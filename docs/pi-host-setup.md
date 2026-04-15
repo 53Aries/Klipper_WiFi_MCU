@@ -4,23 +4,23 @@ This guide takes you from a **brand-new Raspberry Pi OS install** to a fully wor
 
 **What you need physically:**
 - Raspberry Pi 5 running **Pi OS Bookworm or Trixie** (64-bit), already booted and on your local network
-- XIAO ESP32-C5 already flashed with the `esp-hosted-pi` firmware (do that on your PC first — see below)
-- Jumper wires to connect the XIAO to the Pi 40-pin header
-- A second XIAO ESP32-C5 connected to your STM32 MCU board, already flashed with `esp-bridge` firmware
+- ESP32-C5 DevKit V2.0 (pi-side) already flashed with the `esp-hosted-pi` firmware (do that on your PC first — see below)
+- Jumper wires to connect the devkit to the Pi 40-pin header
+- A Seeed XIAO ESP32-C5 (MCU-side) connected to your STM32 MCU board, already flashed with `esp-bridge` firmware
 - SSH access to the Pi from your PC
 
 ---
 
-## Before you start — flash the two XIAOs on your PC
+## Before you start — flash the ESP boards on your PC
 
 Do both of these on your Windows PC **before** touching the Pi.
 
-### Pi-side XIAO (esp-hosted-pi firmware)
+### Pi-side DevKit (esp-hosted-pi firmware)
 
 1. Open the `esp-hosted-pi` folder in VS Code / PlatformIO
-2. Hold **BOOT** on the XIAO, tap **RESET**, release **BOOT** — the XIAO is now in flash mode
+2. Hold **BOOT** on the devkit, tap **RESET**, release **BOOT** — the board is now in flash mode
 3. Run **Upload** in PlatformIO
-4. When it finishes, disconnect the USB cable — the XIAO is ready
+4. When it finishes, disconnect the USB cable — the devkit is ready
 
 ### MCU-side XIAO (esp-bridge firmware)
 
@@ -39,27 +39,27 @@ Do both of these on your Windows PC **before** touching the Pi.
 
 ---
 
-## Step 1 — Wire the pi-side XIAO to the Pi 40-pin header
+## Step 1 — Wire the pi-side DevKit to the Pi 40-pin header
 
-The XIAO connects to the Pi via SPI. Use the Pi's **3.3 V rail** — do not use 5 V.
+The ESP32-C5 DevKit connects to the Pi via SPI. All signals use edge connector pins on the devkit.
 
-Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V) and Pin 24 (CS) are the only right-side wires.
+Almost all wires land on the **left column** of the Pi header (odd pins). Pin 4 (5V) and Pin 18 (Handshake) and Pin 24 (CS) are on the right.
 
-| Pi physical pin | Side  | Signal     | XIAO pad       |
+| Pi physical pin | Side  | Signal     | DevKit pin     |
 |-----------------|-------|------------|----------------|
-| Pin 4           | Right | 5V         | VBUS           |
+| Pin 4           | Right | 5V         | 5V             |
 | Pin 9           | Left  | GND        | GND            |
 | Pin 11          | Left  | Reset      | RST            |
-| Pin 13          | Left  | Data Ready | IO4 (MTCK) ⚠   |
-| Pin 18          | Right | Handshake  | IO3 (MTDI) ⚠   |
-| Pin 19          | Left  | SPI0 MOSI  | IO7 (D3)       |
-| Pin 21          | Left  | SPI0 MISO  | IO2 (MTMS) ⚠   |
-| Pin 23          | Left  | SPI0 SCLK  | IO6 (D2)       |
-| Pin 24          | **Right** | SPI0 CS | IO10 (D10)  |
+| Pin 13          | Left  | Data Ready | GPIO4          |
+| Pin 18          | Right | Handshake  | GPIO3          |
+| Pin 19          | Left  | SPI0 MOSI  | GPIO7          |
+| Pin 21          | Left  | SPI0 MISO  | GPIO2          |
+| Pin 23          | Left  | SPI0 SCLK  | GPIO6          |
+| Pin 24          | **Right** | SPI0 CS | GPIO10      |
 
-> ⚠ **Three of these signals use pads on the BOTTOM of the XIAO, not edge connectors.** MTCK (IO4), MTDI (IO3), and MTMS (IO2) are labeled on the board underside. Do NOT confuse them with edge connector pins D3 (GPIO7) or D4 (GPIO23) — those are completely different GPIOs. Only MISO (MTMS) requires a bottom pad; MOSI (D3), SCLK (D2), and CS (D10) all use edge connectors.
+All nine connections use the devkit’s edge connector pins — no bottom-pad soldering required.
 
-> The XIAO's 3V3 pin is regulator **output** only — do not connect it to the Pi. Use VBUS (accepts 5V input, feeds the onboard regulator).
+> The devkit’s 3V3 pin is regulator **output** only — do not connect it to the Pi. Use the 5V pin (onboard regulator steps it down).
 
 Full details with signal directions and driver GPIO numbers: [docs/spi-pinout.md](spi-pinout.md)
 
@@ -139,7 +139,7 @@ dmesg | grep -i esp | tail -10
 Expected: messages about SPI transport initialising
 
 **If `wlan0` does not appear:**
-- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin — especially the bottom pads (MTCK, MTDI, MTMS) which are NOT edge connectors
+- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin
 - Module loaded? `lsmod | grep esp` — if missing, run `sudo modprobe esp32_spi` and check `dmesg | tail -20`
 - SPI bus alive? `ls /sys/bus/spi/devices/` should show `spi10.0`
 - DataReady firing? `cat /proc/interrupts | grep ESP` — ESP_SPI_DATA_READY must have count > 0

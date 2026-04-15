@@ -19,10 +19,10 @@ Signals are ordered by physical pin number. All wires land on the **left (odd) c
 | Handshake   | BCM 24   | Pin 18            | Right | GPIO 3    | MTDI ⚠        | **Bottom pad**    | XIAO → Pi  |
 | SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3            | Edge connector    | Pi → XIAO  |
 | SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS ⚠        | **Bottom pad**    | XIAO → Pi  |
-| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT ⚠    | **Bottom pad**    | Pi → XIAO  |
+| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | D2            | Edge connector    | Pi → XIAO  |
 | SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10           | Edge connector    | Pi → XIAO  |
 
-> ⚠ **Four signals use pads on the BOTTOM of the XIAO, not edge connectors.** MTCK (IO4), MTDI (IO3), MTMS (IO2), and ADC_BAT (IO6) are small castellated pads on the board underside. Do NOT confuse them with edge connector pins like D3 or D4 — those are completely different GPIOs (D3 = GPIO7, D4 = GPIO23). Only VBUS, GND, RST, D3 (MOSI), and D10 (CS) use edge connectors.
+> ⚠ **Three signals use pads on the BOTTOM of the XIAO, not edge connectors.** MTCK (IO4), MTDI (IO3), and MTMS (IO2) are small castellated pads on the board underside. Do NOT confuse them with edge connector pins like D3 or D4 — those are completely different GPIOs (D3 = GPIO7, D4 = GPIO23).
 
 > **Power note:** The XIAO's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → XIAO VBUS. The onboard regulator steps it down to 3.3V internally.
 
@@ -63,8 +63,7 @@ To change a pin, add the relevant `CONFIG_ESP_SPI_HSPI_GPIO_*` line to
 
 GPIO2, GPIO3, and GPIO4 are shared with the XIAO's JTAG interface
 (MTMS, MTDI, MTCK respectively). JTAG debugging is **not available**
-while the SPI link is in use. GPIO6 is also the battery ADC enable pin —
-do not use the battery voltage measurement feature in this configuration.
+while the SPI link is in use.
 
 ---
 

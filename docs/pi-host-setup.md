@@ -54,10 +54,10 @@ Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V
 | Pin 18          | Right | Handshake  | IO3 (MTDI) ⚠   |
 | Pin 19          | Left  | SPI0 MOSI  | IO7 (D3)       |
 | Pin 21          | Left  | SPI0 MISO  | IO2 (MTMS) ⚠   |
-| Pin 23          | Left  | SPI0 SCLK  | IO6 (ADC_BAT) ⚠|
+| Pin 23          | Left  | SPI0 SCLK  | IO6 (D2)       |
 | Pin 24          | **Right** | SPI0 CS | IO10 (D10)  |
 
-> ⚠ **Four of these signals use pads on the BOTTOM of the XIAO, not the edge connectors.** The bottom pads are the small castellated/labeled pads on the underside of the board: MTCK (IO4), MTDI (IO3), MTMS (IO2), and ADC_BAT (IO6). Do NOT confuse them with the edge connector pins D3 (GPIO7) or D4 (GPIO23) — those are completely different GPIOs. Only VBUS, GND, RST, D3 (MOSI), and D10 (CS) use edge connectors.
+> ⚠ **Three of these signals use pads on the BOTTOM of the XIAO, not edge connectors.** MTCK (IO4), MTDI (IO3), and MTMS (IO2) are labeled on the board underside. Do NOT confuse them with edge connector pins D3 (GPIO7) or D4 (GPIO23) — those are completely different GPIOs. Only MISO (MTMS) requires a bottom pad; MOSI (D3), SCLK (D2), and CS (D10) all use edge connectors.
 
 > The XIAO's 3V3 pin is regulator **output** only — do not connect it to the Pi. Use VBUS (accepts 5V input, feeds the onboard regulator).
 
@@ -139,7 +139,7 @@ dmesg | grep -i esp | tail -10
 Expected: messages about SPI transport initialising
 
 **If `wlan0` does not appear:**
-- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin — especially the bottom pads (MTCK, MTDI, MTMS, ADC_BAT) which are NOT edge connectors
+- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin — especially the bottom pads (MTCK, MTDI, MTMS) which are NOT edge connectors
 - Module loaded? `lsmod | grep esp` — if missing, run `sudo modprobe esp32_spi` and check `dmesg | tail -20`
 - SPI bus alive? `ls /sys/bus/spi/devices/` should show `spi10.0`
 - DataReady firing? `cat /proc/interrupts | grep ESP` — ESP_SPI_DATA_READY must have count > 0

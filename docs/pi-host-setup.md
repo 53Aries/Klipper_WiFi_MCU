@@ -3,7 +3,7 @@
 This guide takes you from a **brand-new Raspberry Pi OS install** to a fully working Klipper WiFi MCU setup. Follow every step in order.
 
 **What you need physically:**
-- Raspberry Pi 5 running **Pi OS Bookworm** (64-bit), already booted and on your local network
+- Raspberry Pi 5 running **Pi OS Bookworm or Trixie** (64-bit), already booted and on your local network
 - XIAO ESP32-C5 already flashed with the `esp-hosted-pi` firmware (do that on your PC first — see below)
 - Jumper wires to connect the XIAO to the Pi 40-pin header
 - A second XIAO ESP32-C5 connected to your STM32 MCU board, already flashed with `esp-bridge` firmware
@@ -45,17 +45,19 @@ The XIAO connects to the Pi via SPI. Use the Pi's **3.3 V rail** — do not use 
 
 Almost all wires land on the **left column** of the header (odd pins). Pin 4 (5V) and Pin 24 (CS) are the only right-side wires.
 
-| Pi physical pin | Side  | Signal     | XIAO pad |
-|-----------------|-------|------------|----------|
-| Pin 4           | Right | 5V         | VBUS     |
-| Pin 9           | Left  | GND        | GND      |
-| Pin 11          | Left  | Reset      | RST      |
-| Pin 13          | Left  | Data Ready | IO4      |
-| Pin 18          | Right | Handshake  | IO3      |
-| Pin 19          | Left  | SPI0 MOSI  | IO7      |
-| Pin 21          | Left  | SPI0 MISO  | IO2      |
-| Pin 23          | Left  | SPI0 SCLK  | IO6      |
-| Pin 24          | **Right** | SPI0 CS | IO10  |
+| Pi physical pin | Side  | Signal     | XIAO pad       |
+|-----------------|-------|------------|----------------|
+| Pin 4           | Right | 5V         | VBUS           |
+| Pin 9           | Left  | GND        | GND            |
+| Pin 11          | Left  | Reset      | RST            |
+| Pin 13          | Left  | Data Ready | IO4 (MTCK) ⚠   |
+| Pin 18          | Right | Handshake  | IO3 (MTDI) ⚠   |
+| Pin 19          | Left  | SPI0 MOSI  | IO7 (D3)       |
+| Pin 21          | Left  | SPI0 MISO  | IO2 (MTMS)     |
+| Pin 23          | Left  | SPI0 SCLK  | IO6 (ADC_BAT)  |
+| Pin 24          | **Right** | SPI0 CS | IO10 (D10)  |
+
+> ⚠ **IO3 and IO4 are JTAG pads on the BOTTOM of the XIAO**, not edge pins. They are labeled MTDI (IO3) and MTCK (IO4) on the board underside. Do NOT confuse them with the top-edge pins D3 (GPIO7) or D4 (GPIO23), which are completely different GPIOs.
 
 > The XIAO's 3V3 pin is regulator **output** only — do not connect it to the Pi. Use VBUS (accepts 5V input, feeds the onboard regulator).
 
@@ -137,9 +139,11 @@ dmesg | grep -i esp | tail -10
 Expected: messages about SPI transport initialising
 
 **If `wlan0` does not appear:**
-- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin
-- Check SPI is enabled: `ls /dev/spi*` should show `/dev/spidev0.0` — if not, check `/boot/firmware/config.txt` for `dtparam=spi=on` and reboot again
-- Check for errors: `dmesg | tail -30`
+- Check wiring: re-read [docs/spi-pinout.md](spi-pinout.md) pin-by-pin — especially the bottom JTAG pads (IO3/MTDI and IO4/MTCK)
+- Module loaded? `lsmod | grep esp` — if missing, run `sudo modprobe esp32_spi` and check `dmesg | tail -20`
+- SPI bus alive? `ls /sys/bus/spi/devices/` should show `spi10.0`
+- DataReady firing? `cat /proc/interrupts | grep ESP` — ESP_SPI_DATA_READY must have count > 0
+- Check for errors: `dmesg | grep -iE 'esp|spi|fail' | tail -30`
 
 ---
 

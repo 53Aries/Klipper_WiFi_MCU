@@ -63,11 +63,18 @@ cd "$HOST_DIR"
 # GPIO numbers below are Pi 5 Linux GPIO numbers (BCM + 512 offset for RP1).
 # These match our wiring:
 #   resetpin=529      → BCM GPIO17 (physical pin 11) → C5 RST
-#   spi-handshake=535 → BCM GPIO23 (physical pin 16) → C5 IO3
 #   spi-handshake=536 → BCM GPIO24 (physical pin 18) → C5 IO3
+#   spi-dataready=539 → BCM GPIO27 (physical pin 13) → C5 IO4
 # NOTE: BCM22 (pin 15) is permanently claimed by spi10 cs-gpios (2712_BOOT_CS_N).
 #       BCM23 (pin 16) has a hardware pull-up (2712_BOOT_MISO) that holds the
 #       line HIGH permanently, preventing the driver from seeing rising edges.
+
+# Module parameters for Pi 5 wiring
+MOD_PARAMS="resetpin=529 spi_bus=10 spi_cs=0 spi_mode=3 spi_handshake=536 spi_dataready=539 clockspeed=10"
+MOD_NAME="esp32_spi"
+KO_SRC="$HOME/esp-hosted/esp_hosted_fg/host/linux/host_driver/esp32/spi/esp32_spi.ko"
+
+# Build the module via rpi_init.sh (it compiles and does a one-shot insmod)
 ./rpi_init.sh wifi=spi bt=- spi-mode=3 --skip-build-apps \
     spi-bus=10 spi-cs=0 resetpin=529 spi-handshake=536 spi-dataready=539 || {
     if [ "$REBOOT_NEEDED" -eq 1 ]; then
@@ -80,16 +87,37 @@ cd "$HOST_DIR"
     fi
 }
 
+echo "=== Installing module for persistent boot loading ==="
+# Copy the compiled .ko into the kernel's extra modules directory
+KVER="$(uname -r)"
+EXTRA_DIR="/lib/modules/${KVER}/extra"
+sudo mkdir -p "$EXTRA_DIR"
+sudo cp "$KO_SRC" "$EXTRA_DIR/${MOD_NAME}.ko"
+sudo depmod -a
+
+# Set default module parameters so modprobe loads with our Pi 5 GPIO config
+sudo tee /etc/modprobe.d/esp32-spi.conf > /dev/null <<EOF
+# ESP-Hosted SPI module parameters for Pi 5 + XIAO ESP32-C5
+options esp32_spi ${MOD_PARAMS}
+EOF
+
+# Tell the kernel to load the module at every boot
+if ! grep -q "^esp32_spi" /etc/modules-load.d/esp32-spi.conf 2>/dev/null; then
+    echo "esp32_spi" | sudo tee /etc/modules-load.d/esp32-spi.conf > /dev/null
+fi
+
 echo ""
 echo "=== SPI GPIO pinout (Pi 5 physical pins → ESP32-C5) ==="
 echo "  Pin 19 (GPIO10 SPI0 MOSI) → IO7"
 echo "  Pin 21 (GPIO9  SPI0 MISO) → IO2"
 echo "  Pin 23 (GPIO11 SPI0 SCLK) → IO6"
 echo "  Pin 24 (GPIO8  SPI0 CE0)  → IO10"
-echo "  Pin 25 (GND)              → GND"
+echo "  Pin 9  (GND)              → GND"
 echo "  Pin 13 (GPIO27 / #539)    → IO4  (Data Ready)"
 echo "  Pin 18 (GPIO24 / #536)    → IO3  (Handshake)"
 echo "  Pin 11 (GPIO17 / #529)    → RST"
 echo ""
-echo "Reboot required for SPI overlay to take effect."
-echo "After reboot, run: lsmod | grep esp — you should see esp32_spi"
+echo "=== Done ==="
+echo "The esp32_spi module will auto-load on every boot with the correct parameters."
+echo "Reboot now:  sudo reboot"
+echo "After reboot, verify:  lsmod | grep esp && cat /proc/interrupts | grep ESP"

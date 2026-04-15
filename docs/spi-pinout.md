@@ -10,19 +10,19 @@ plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
 Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except SPI CS (pin 24) and 5V power (pin 4), both on the right column.
 
-| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | XIAO GPIO | XIAO Pad      | Location     | Direction  |
-|-------------|----------|-------------------|-------|-----------|---------------|--------------|------------|
-| 5V          | —        | Pin 4             | Right | —         | VBUS          | Top edge     | Pi → XIAO  |
-| GND         | GND      | Pin 9             | Left  | GND       | GND           | Top edge     | —          |
-| Reset       | BCM 17   | Pin 11            | Left  | RST / EN  | RESET         | Top edge     | Pi → XIAO  |
-| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4    | MTCK ⚠        | **Bottom**   | XIAO → Pi  |
-| Handshake   | BCM 24   | Pin 18            | Right | GPIO 3    | MTDI ⚠        | **Bottom**   | XIAO → Pi  |
-| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3            | Top edge     | Pi → XIAO  |
-| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS          | **Bottom**   | XIAO → Pi  |
-| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT      | **Bottom**   | Pi → XIAO  |
-| SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10           | Top edge     | Pi → XIAO  |
+| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | XIAO GPIO | XIAO Pad      | Location          | Direction  |
+|-------------|----------|-------------------|-------|-----------|---------------|-------------------|------------|
+| 5V          | —        | Pin 4             | Right | —         | VBUS          | Edge connector    | Pi → XIAO  |
+| GND         | GND      | Pin 9             | Left  | GND       | GND           | Edge connector    | —          |
+| Reset       | BCM 17   | Pin 11            | Left  | RST / EN  | RESET         | Edge connector    | Pi → XIAO  |
+| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4    | MTCK ⚠        | **Bottom pad**    | XIAO → Pi  |
+| Handshake   | BCM 24   | Pin 18            | Right | GPIO 3    | MTDI ⚠        | **Bottom pad**    | XIAO → Pi  |
+| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7    | D3            | Edge connector    | Pi → XIAO  |
+| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2    | MTMS ⚠        | **Bottom pad**    | XIAO → Pi  |
+| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6    | ADC\_BAT ⚠    | **Bottom pad**    | Pi → XIAO  |
+| SPI CS      | BCM 8    | Pin 24 ⚠          | Right | GPIO 10   | D10           | Edge connector    | Pi → XIAO  |
 
-> ⚠ **MTCK, MTDI, MTMS, and ADC_BAT are pads on the BOTTOM of the XIAO** (the side with the castellated pads). They are NOT the top-edge pins D3/D4/D5 etc. The top-edge "D3" is GPIO7 (SPI MOSI); the bottom "MTDI" is GPIO3 (Handshake). Do not confuse them.
+> ⚠ **Four signals use pads on the BOTTOM of the XIAO, not edge connectors.** MTCK (IO4), MTDI (IO3), MTMS (IO2), and ADC_BAT (IO6) are small castellated pads on the board underside. Do NOT confuse them with edge connector pins like D3 or D4 — those are completely different GPIOs (D3 = GPIO7, D4 = GPIO23). Only VBUS, GND, RST, D3 (MOSI), and D10 (CS) use edge connectors.
 
 > **Power note:** The XIAO's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → XIAO VBUS. The onboard regulator steps it down to 3.3V internally.
 

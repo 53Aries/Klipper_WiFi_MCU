@@ -4,25 +4,39 @@ The pi-side ESP32-C5 DevKit acts as an SPI slave running ESP-Hosted firmware.
 The Pi is the SPI master. Six signals are required: the four standard SPI lines
 plus two ESP-Hosted control signals (Handshake and DataReady), and a reset line.
 
+All six ESP GPIOs belong to the **native FSPI (SPI2) pin group** on the C5,
+giving the best signal integrity and IO_MUX routing:
+
+| ESP GPIO | FSPI function | Signal      |
+|----------|---------------|-------------|
+| IO2      | FSPIQ         | MISO        |
+| IO4      | FSPIHD        | Handshake   |
+| IO5      | FSPIWP        | DataReady   |
+| IO6      | FSPICLK       | SCLK        |
+| IO7      | FSPID         | MOSI        |
+| IO10     | FSPICS0       | CS          |
+
 ---
 
 ## Wiring Table
 
 Signals are ordered by physical pin number. All wires land on the **left (odd) column** of the 40-pin header except 5V power (pin 4), Handshake (pin 18), and SPI CS (pin 24), which are on the right column.
 
-All DevKit connections use **edge connector pins** — no bottom-pad soldering.
+All DevKit connections use **edge connector pins** -- no bottom-pad soldering.
+IO4 and IO5 are on the **right side** of the DevKit board; all other SPI signals
+are on the left side.
 
-| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | DevKit GPIO | Direction  |
-|-------------|----------|-------------------|-------|-------------|------------|
-| 5V          | —        | Pin 4             | Right | 5V          | Pi → ESP   |
-| GND         | GND      | Pin 9             | Left  | GND         | —          |
-| Reset       | BCM 17   | Pin 11            | Left  | RST / EN    | Pi → ESP   |
-| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 4      | ESP → Pi   |
-| Handshake   | BCM 24   | Pin 18            | Right | GPIO 3      | ESP → Pi   |
-| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7      | Pi → ESP   |
-| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2      | ESP → Pi   |
-| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6      | Pi → ESP   |
-| SPI CS      | BCM 8    | Pin 24            | Right | GPIO 10     | Pi → ESP   |
+| Signal      | Pi 5 BCM | Pi 5 Physical Pin | Side  | DevKit GPIO | DevKit Side | Direction  |
+|-------------|----------|-------------------|-------|-------------|-------------|------------|
+| 5V          | --       | Pin 4             | Right | 5V          | Left        | Pi -> ESP  |
+| GND         | GND      | Pin 9             | Left  | GND         | Left        | --         |
+| Reset       | BCM 17   | Pin 11            | Left  | RST / EN    | Left        | Pi -> ESP  |
+| DataReady   | BCM 27   | Pin 13            | Left  | GPIO 5      | Right       | ESP -> Pi  |
+| Handshake   | BCM 24   | Pin 18            | Right | GPIO 4      | Right       | ESP -> Pi  |
+| SPI MOSI    | BCM 10   | Pin 19            | Left  | GPIO 7      | Left        | Pi -> ESP  |
+| SPI MISO    | BCM 9    | Pin 21            | Left  | GPIO 2      | Left        | ESP -> Pi  |
+| SPI SCLK    | BCM 11   | Pin 23            | Left  | GPIO 6      | Left        | Pi -> ESP  |
+| SPI CS      | BCM 8    | Pin 24            | Right | GPIO 10     | Left        | Pi -> ESP  |
 
 > **Power note:** The devkit's 3V3 pin is regulator output only. Connect Pi 5V (pin 4) → DevKit 5V. The onboard regulator steps it down to 3.3V internally.
 
@@ -54,20 +68,23 @@ SPI bus: SPI0, CE0 (`spi_bus=10 spi_cs=0` — CE0 is freed at boot by the `spide
 
 ## ESP-Hosted Firmware Config Source
 
-These are the **Kconfig defaults** for `IDF_TARGET_ESP32C5` in
-`main/Kconfig.projbuild`. They are **not** overridden in
-`sdkconfig.defaults.esp32c5` — the defaults match the wiring.
+The SPI bus pins use Kconfig defaults for `IDF_TARGET_ESP32C5` in
+`main/Kconfig.projbuild`:
+- MOSI=IO7, MISO=IO2, CLK=IO6, CS=IO10
 
-To change a pin, add the relevant `CONFIG_ESP_SPI_HSPI_GPIO_*` line to
-`sdkconfig.defaults.esp32c5`.
+Handshake and DataReady are overridden in `sdkconfig.defaults.esp32c5` to use the
+remaining FSPI group pins instead of the Kconfig defaults (IO3, IO4):
+- `CONFIG_ESP_SPI_GPIO_HANDSHAKE=4`
+- `CONFIG_ESP_SPI_GPIO_DATA_READY=5`
 
 ---
 
-## ⚠ JTAG Note
+## JTAG Note
 
-GPIO2, GPIO3, and GPIO4 are shared with the ESP32-C5’s JTAG interface
-(MTMS, MTDI, MTCK respectively). JTAG debugging is **not available**
-while the SPI link is in use.
+GPIO2 (MTMS), GPIO4 (MTCK), and GPIO5 (MTDO) are shared with the ESP32-C5's
+pad-JTAG interface. When the SPI slave peripheral claims them (IO_MUX / GPIO
+matrix), JTAG is overridden. JTAG debugging is **not available** while the SPI
+link is in use.
 
 ---
 

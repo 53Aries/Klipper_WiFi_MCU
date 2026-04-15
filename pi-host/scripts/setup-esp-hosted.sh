@@ -79,8 +79,8 @@ fi
 echo "=== Detected RP1 GPIO base: $RP1_BASE ==="
 
 # BCM GPIO numbers for our wiring (add RP1_BASE to get Linux GPIO number):
-#   BCM17 (pin 11) → RST          BCM24 (pin 18) → Handshake (IO3)
-#   BCM27 (pin 13) → DataReady (IO4)
+#   BCM17 (pin 11) → RST          BCM24 (pin 18) → Handshake (IO4 / FSPIHD)
+#   BCM27 (pin 13) → DataReady (IO5 / FSPIWP)
 RESETPIN=$((RP1_BASE + 17))
 HANDSHAKE=$((RP1_BASE + 24))
 DATAREADY=$((RP1_BASE + 27))
@@ -141,8 +141,8 @@ echo "  Pin 21 (BCM9  SPI0 MISO) → GPIO2"
 echo "  Pin 23 (BCM11 SPI0 SCLK) → GPIO6"
 echo "  Pin 24 (BCM8  SPI0 CE0)  → GPIO10"
 echo "  Pin 9  (GND)             → GND"
-echo "  Pin 13 (BCM27 / #$DATAREADY)  → GPIO4  (Data Ready)"
-echo "  Pin 18 (BCM24 / #$HANDSHAKE)  → GPIO3  (Handshake)"
+echo "  Pin 13 (BCM27 / #$DATAREADY)  → GPIO5  (Data Ready)"
+echo "  Pin 18 (BCM24 / #$HANDSHAKE)  → GPIO4  (Handshake)"
 echo "  Pin 11 (BCM17 / #$RESETPIN)   → RST"
 echo ""
 echo "=== Done ==="

@@ -965,7 +965,26 @@ static void host_reset_task(void* pvParameters)
 	while (1) {
 
 		if (host_reset_sem) {
-			xSemaphoreTake(host_reset_sem, portMAX_DELAY);
+			/* Wait up to 5 s for the semaphore; on timeout re-send the
+			 * startup event if the host has not yet opened the data path.
+			 * This covers the case where the Pi driver consumed the first
+			 * startup event but never finished the handshake, or where
+			 * esp_reset() failed and the ESP was not power-cycled. */
+			if (xSemaphoreTake(host_reset_sem, pdMS_TO_TICKS(5000)) == pdFALSE) {
+				if (host_active) {
+					/* Host is active, just loop back and wait */
+					continue;
+				}
+				/* Only re-send if DataReady is LOW (previous event was
+				 * consumed or was never sent).  If it is still HIGH the
+				 * host simply hasn't read it yet — no point in queuing
+				 * another transaction. */
+				if (gpio_get_level(CONFIG_ESP_SPI_GPIO_DATA_READY)) {
+					ESP_LOGD(TAG, "DataReady still HIGH — host hasn't read yet, waiting");
+					continue;
+				}
+				ESP_LOGW(TAG, "Host not active, DataReady LOW — re-sending startup event");
+			}
 		} else {
 			vTaskDelay(pdMS_TO_TICKS(100));
 			continue;

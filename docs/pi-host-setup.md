@@ -50,8 +50,8 @@ Almost all wires land on the **left column** of the Pi header (odd pins). Pin 4 
 | Pin 4           | Right | 5V         | 5V             |
 | Pin 9           | Left  | GND        | GND            |
 | Pin 11          | Left  | Reset      | RST            |
-| Pin 13          | Left  | Data Ready | GPIO4          |
-| Pin 18          | Right | Handshake  | GPIO3          |
+| Pin 13          | Left  | Data Ready | GPIO5          |
+| Pin 18          | Right | Handshake  | GPIO4          |
 | Pin 19          | Left  | SPI0 MOSI  | GPIO7          |
 | Pin 21          | Left  | SPI0 MISO  | GPIO2          |
 | Pin 23          | Left  | SPI0 SCLK  | GPIO6          |

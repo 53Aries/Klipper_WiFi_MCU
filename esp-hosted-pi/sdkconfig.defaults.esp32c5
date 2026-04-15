@@ -36,10 +36,11 @@ CONFIG_ESP_WIFI_RX_IRAM_OPT=y
 # Info only — verbose logs add SPI overhead during operation
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
-# ── GPIO pins: C5 Kconfig defaults already match our wiring ───────────────
-#   MOSI=IO7  MISO=IO2  SCLK=IO6  CS=IO10  Handshake=IO3  DataReady=IO4
+# ── GPIO pins ─────────────────────────────────────────────────────────────
+# Use the native FSPI (SPI2) pin group on the ESP32-C5 DevKit V2.0:
+#   MOSI=IO7 (FSPID)   MISO=IO2 (FSPIQ)   CLK=IO6 (FSPICLK)   CS=IO10 (FSPICS0)
+#   Handshake=IO4 (FSPIHD)   DataReady=IO5 (FSPIWP)
 #
-# Pi 5 Linux GPIO numbers used in rpi_init.sh (BCM + 512 for RP1):
-#   resetpin=529  (GPIO17 / pin 11)
-#   spi-handshake=534  (GPIO22 / pin 15)
-#   spi-dataready=539  (GPIO27 / pin 13)
+# The Kconfig defaults for C5 set Handshake=3 and DataReady=4 — override them.
+CONFIG_ESP_SPI_GPIO_HANDSHAKE=4
+CONFIG_ESP_SPI_GPIO_DATA_READY=5

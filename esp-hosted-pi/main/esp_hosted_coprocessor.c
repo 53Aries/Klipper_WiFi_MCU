@@ -641,6 +641,8 @@ static esp_err_t serial_write_data(uint8_t* data, ssize_t len)
 	return ESP_OK;
 }
 
+static int connect_sta(void);  /* defined below; called from event_handler */
+
 int event_handler(uint8_t val)
 {
 	switch(val) {
@@ -652,6 +654,14 @@ int event_handler(uint8_t val)
 				ESP_EARLY_LOGI(TAG, "Start Data Path");
 				if (host_reset_sem) {
 					xSemaphoreGive(host_reset_sem);
+				}
+				/* Start WiFi now that the SPI link is confirmed live.
+				 * Delaying until here prevents WiFi reconnect packets from
+				 * filling the TX queue before the startup event is sent. */
+				static bool s_wifi_started = false;
+				if (!s_wifi_started) {
+					s_wifi_started = true;
+					connect_sta();
 				}
 			} else {
 				ESP_EARLY_LOGI(TAG, "Failed to Start Data Path");
@@ -1103,10 +1113,6 @@ esp_err_t esp_hosted_coprocessor_init(void)
 			"host+slave"
 #endif
 			);
-#endif
-
-#if 1
-	connect_sta();
 #endif
 
 	ESP_LOGI(TAG, "bus tx locked on slave boot-up");

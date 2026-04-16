@@ -30,6 +30,7 @@
 #include "stats.h"
 #include "esp_timer.h"
 #include "esp_fw_version.h"
+#include "esp_cache.h"
 
 // de-assert HS signal on CS, instead of at end of transaction
 #if defined(CONFIG_ESP_SPI_DEASSERT_HS_ON_CS)
@@ -151,8 +152,8 @@ static struct hosted_mempool * buf_mp_tx_g;
 static struct hosted_mempool * buf_mp_rx_g;
 static struct hosted_mempool * trans_mp_g;
 
-/* Full size dummy buffer for no-data transactions */
-static DRAM_ATTR uint8_t dummy_buffer[SPI_BUFFER_SIZE] __attribute__((aligned(4)));
+/* Full size dummy buffer for no-data transactions (heap-allocated, cache-aligned for DMA) */
+static uint8_t *dummy_buffer;
 
 static inline void spi_mempool_create()
 {
@@ -291,7 +292,10 @@ void generate_startup_event(uint8_t cap)
 
 	raw_tp_cap = debug_get_raw_tp_conf();
 
-	assert(buf_handle.payload);
+	if (!buf_handle.payload) {
+		ESP_LOGW(TAG, "generate_startup_event: TX buffer alloc failed, skipping");
+		return;
+	}
 	header = (struct esp_payload_header *) buf_handle.payload;
 
 	header->if_type = ESP_PRIV_IF;
@@ -360,10 +364,18 @@ void generate_startup_event(uint8_t cap)
 #endif
 
 #ifdef CONFIG_ESP_ENABLE_TX_PRIORITY_QUEUES
-	xQueueSend(spi_tx_queue[PRIO_Q_OTHERS], &buf_handle, portMAX_DELAY);
+	if (pdFALSE == xQueueSend(spi_tx_queue[PRIO_Q_OTHERS], &buf_handle, 0)) {
+		ESP_LOGW(TAG, "generate_startup_event: TX queue full, freeing buffer");
+		spi_buffer_tx_free(buf_handle.payload);
+		return;
+	}
 	xSemaphoreGive(spi_tx_sem);
 #else
-	xQueueSend(spi_tx_queue, &buf_handle, portMAX_DELAY);
+	if (pdFALSE == xQueueSend(spi_tx_queue, &buf_handle, 0)) {
+		ESP_LOGW(TAG, "generate_startup_event: TX queue full, freeing buffer");
+		spi_buffer_tx_free(buf_handle.payload);
+		return;
+	}
 #endif
 
 	set_dataready_gpio();
@@ -534,14 +546,18 @@ static void queue_next_transaction(void)
 
 	spi_trans = spi_trans_alloc(MEMSET_REQUIRED);
 	if (!spi_trans) {
-		ESP_LOGW(TAG, "No free SPI transaction buffers, skipping");
+		ESP_LOGW(TAG, "No free SPI transaction buffers — freeing TX buf to prevent leak");
+		if (tx_buffer != dummy_buffer)
+			spi_buffer_tx_free(tx_buffer);
 		return;
 	}
 
 	/* Use RX mempool instead of direct heap allocation */
 	uint8_t *rx_buffer = spi_buffer_rx_alloc(MEMSET_REQUIRED);
 	if (!rx_buffer) {
-		ESP_LOGW(TAG, "No free RX buffers, skipping");
+		ESP_LOGW(TAG, "No free RX buffers — freeing TX buf and trans to prevent leak");
+		if (tx_buffer != dummy_buffer)
+			spi_buffer_tx_free(tx_buffer);
 		spi_trans_free(spi_trans);
 		return;
 	}
@@ -549,6 +565,16 @@ static void queue_next_transaction(void)
 	spi_trans->rx_buffer = rx_buffer;
 	spi_trans->tx_buffer = tx_buffer;
 	spi_trans->length = SPI_BUFFER_SIZE * SPI_BITS_PER_WORD;
+
+	/* On ESP32-C5 (and other targets where GDMA bypasses the CPU L1 cache),
+	 * we must flush the cache to physical RAM before the DMA peripheral reads
+	 * the TX buffer. dummy_buffer is flushed once at init; real payload
+	 * buffers must be flushed on every use since they contain new data. */
+	if (tx_buffer != dummy_buffer) {
+		esp_cache_msync(tx_buffer, SPI_BUFFER_SIZE,
+				ESP_CACHE_MSYNC_FLAG_DIR_C2M |
+				ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+	}
 
 	spi_slave_queue_trans(ESP_SPI_CONTROLLER, spi_trans, portMAX_DELAY);
 }
@@ -692,13 +718,22 @@ static interface_handle_t * esp_spi_init(void)
 	reset_handshake_gpio();
 	reset_dataready_gpio();
 
+	dummy_buffer = heap_caps_malloc(SPI_BUFFER_SIZE, MALLOC_CAP_DMA | MALLOC_CAP_CACHE_ALIGNED);
+	assert(dummy_buffer);
+
 	header = (struct esp_payload_header *) dummy_buffer;
-	memset(dummy_buffer, 0, sizeof(struct esp_payload_header));
+	memset(dummy_buffer, 0, SPI_BUFFER_SIZE);
 
 	/* Populate header to indicate it as a dummy buffer */
 	header->if_type = ESP_MAX_IF;
 	header->if_num = 0xF;
 	header->len = 0;
+
+	/* Flush entire dummy_buffer to physical RAM so GDMA sees zeros, not 0xFF.
+	 * On ESP32-C5 the L1 cache is write-back; BSS/memset writes are cached but
+	 * physical SRAM stays at power-on 0xFF until explicitly flushed. */
+	esp_cache_msync(dummy_buffer, SPI_BUFFER_SIZE,
+			ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
 
 
 	/* Enable pull-ups on SPI lines
@@ -863,16 +898,28 @@ static int32_t esp_spi_write(interface_handle_t *handle, interface_buffer_handle
 			header->if_type, buf_handle->payload_len, total_len);
 
 #ifdef CONFIG_ESP_ENABLE_TX_PRIORITY_QUEUES
-	if (header->if_type == ESP_SERIAL_IF)
-		xQueueSend(spi_tx_queue[PRIO_Q_SERIAL], &tx_buf_handle, portMAX_DELAY);
-	else if (header->if_type == ESP_HCI_IF)
-		xQueueSend(spi_tx_queue[PRIO_Q_BT], &tx_buf_handle, portMAX_DELAY);
-	else
-		xQueueSend(spi_tx_queue[PRIO_Q_OTHERS], &tx_buf_handle, portMAX_DELAY);
+	{
+		QueueHandle_t q;
+		if (header->if_type == ESP_SERIAL_IF)
+			q = spi_tx_queue[PRIO_Q_SERIAL];
+		else if (header->if_type == ESP_HCI_IF)
+			q = spi_tx_queue[PRIO_Q_BT];
+		else
+			q = spi_tx_queue[PRIO_Q_OTHERS];
 
-	xSemaphoreGive(spi_tx_sem);
+		if (pdFALSE == xQueueSend(q, &tx_buf_handle, 0)) {
+			ESP_LOGW(TAG, "TX queue full, dropping packet (if_type=%d)", header->if_type);
+			spi_buffer_tx_free(tx_buf_handle.payload);
+			return ESP_FAIL;
+		}
+		xSemaphoreGive(spi_tx_sem);
+	}
 #else
-	xQueueSend(spi_tx_queue, &tx_buf_handle, portMAX_DELAY);
+	if (pdFALSE == xQueueSend(spi_tx_queue, &tx_buf_handle, 0)) {
+		ESP_LOGW(TAG, "TX queue full, dropping packet (if_type=%d)", header->if_type);
+		spi_buffer_tx_free(tx_buf_handle.payload);
+		return ESP_FAIL;
+	}
 #endif
 
 	set_dataready_gpio();

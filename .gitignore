@@ -1,0 +1,21 @@
+# PlatformIO
+.pio/
+.vscode/
+*.pyc
+__pycache__/
+
+# ESP-IDF build artifacts
+build/
+sdkconfig
+sdkconfig.old
+
+# Python
+*.egg-info/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code internal
+.claude/

@@ -1,0 +1,58 @@
+# sdkconfig.defaults for host ESP32-C5 (Pi5-side, SPI slave + WiFi 6 AP)
+# Values here override the defaults from ESP-IDF menuconfig.
+# Run 'pio run -e host_esp -t menuconfig' to browse all options.
+
+# ── Flash ────────────────────────────────────────────────────────────────────
+# Compact ESP32-C5 host board uses ESP32-C5-WROOM-1 with 4 MB flash.
+# Must match the physical chip or esptool will refuse to flash / OTA will fail.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+# No OTA – single factory app partition (saves ~32 KB RAM from OTA agent)
+CONFIG_APP_UPDATE_ENABLE=n
+
+# ── CPU & system ────────────────────────────────────────────────────────────
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+
+# ── FreeRTOS ────────────────────────────────────────────────────────────────
+CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_USE_TRACE_FACILITY=n
+
+# ── WiFi ────────────────────────────────────────────────────────────────────
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=y
+CONFIG_ESP_WIFI_MBEDTLS_CRYPTO=y
+# 802.11ax (WiFi 6) target wake time disabled for AP simplicity
+CONFIG_ESP_WIFI_11AX_SUPPORT=y
+CONFIG_ESP_WIFI_SOFTAP_BEACON_EPOCH=y
+
+# Hidden SSID + WPA3 requires PMF
+CONFIG_ESP_WIFI_SOFTAP_PMF_SUPPORT=y
+
+# ── lwIP ────────────────────────────────────────────────────────────────────
+CONFIG_LWIP_MAX_SOCKETS=16
+CONFIG_LWIP_TCP_KEEPALIVE=y
+CONFIG_LWIP_SO_RCVBUF=y
+CONFIG_LWIP_SO_LINGER=y
+# Larger TCP buffers for reduced latency under SPI bandwidth constraints
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=8192
+CONFIG_LWIP_TCP_WND_DEFAULT=8192
+
+# ── NVS ─────────────────────────────────────────────────────────────────────
+CONFIG_NVS_ENCRYPTION=n
+
+# ── Logging ─────────────────────────────────────────────────────────────────
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# ── Stack / heap ─────────────────────────────────────────────────────────────
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+
+# ── SPI ─────────────────────────────────────────────────────────────────────
+# SPI DMA and GPIO matrix routing handled at runtime – no extra sdkconfig needed.
+
+# ── Custom KWM overrides (optional, override hardcoded defaults) ─────────────
+# CONFIG_KWM_WIFI_SSID="KlipperMesh"
+# CONFIG_KWM_WIFI_PASSWORD="klipper42!"
+# CONFIG_KWM_WIFI_CHANNEL=6

@@ -1,0 +1,7 @@
+# Partition table for 4 MB flash, no OTA.
+# Maximises the single app partition (fits WiFi stack + our firmware comfortably).
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x6000,
+phy_init, data, phy,     0xf000,   0x1000,
+app,      app,  factory, 0x10000,  0x3C0000,

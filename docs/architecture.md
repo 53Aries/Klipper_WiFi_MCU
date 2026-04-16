@@ -3,7 +3,7 @@
 ## Overview
 
 Wireless Klipper MCU boards using STM32 + ESP32-C5 over WiFi 6, with the Pi 5
-hosting a dedicated isolated WLAN via a second ESP32-C5.
+connected to a dedicated ESP32-C5 WiFi 6 AP via USB (CDC-NCM).
 
 ## System Diagram
 
@@ -11,14 +11,13 @@ hosting a dedicated isolated WLAN via a second ESP32-C5.
 ┌─────────────────────────────────────────────┐
 │           Raspberry Pi 5 (Host)             │
 │                                             │
-│  Klipper ◄──► wlan0 (via ESP-Hosted)       │
+│  Klipper ◄──► usb0 (USB CDC-NCM ethernet)  │
 │               192.168.42.1                  │
-│  hostapd → WiFi 6 AP, 5GHz, ch.36          │
 └──────────────┬──────────────────────────────┘
-               │ SPI (ESP-Hosted-FG)
+               │ USB (CDC-NCM, no driver needed)
            ESP32-C5 #0  [Pi WiFi adapter]
-               │
-               │ 802.11ax WiFi 6, 5GHz
+               │ USB OTG → appears as usb0/eth1 on Pi
+               │ softAP: 802.11ax WiFi 6, 5GHz, OFDMA
                │ SSID: klipper-mcu-net (hidden)
                │ 192.168.42.0/24
        ┌───────┼───────┐
@@ -45,10 +44,10 @@ restart_method: command
 
 | Component | Firmware | Job |
 |-----------|----------|-----|
-| Pi-side ESP32-C5 | ESP-Hosted-FG | Appears as wlan0 to Linux; runs as AP via hostapd |
-| MCU-side ESP32-C5 | esp-bridge (this repo) | UART↔TCP bridge; connects to Pi AP as station |
+| Pi-side ESP32-C5 | esp-hosted-pi (TinyUSB CDC-NCM + softAP) | USB Ethernet to Pi; WiFi 6 AP for MCU boards |
+| MCU-side ESP32-C5 | esp-bridge (this repo) | UART↔TCP bridge; connects to Pi C5 AP as station |
 | STM32 | Klipper MCU firmware (unmodified) | Stepper/heater/sensor control |
-| Pi 5 | Klipper host + hostapd + dnsmasq | Move planning, G-code, AP |
+| Pi 5 | Klipper host | Move planning, G-code |
 
 ## Network
 
@@ -60,5 +59,10 @@ restart_method: command
 ## Why This Works
 
 Neither Klipper on the Pi nor Klipper on the STM32 knows anything about WiFi.
-From Klipper's perspective it's a socket connection. From the STM32's perspective
-it's a UART. The two C5s handle everything in between.
+From Klipper's perspective it's a socket connection on usb0. From the STM32's
+perspective it's a UART. The two C5s handle everything in between.
+
+The Pi-side C5 connects via a single USB cable — the Pi sees it as a standard
+USB Ethernet adapter using the built-in `cdc_ncm` kernel module. No custom
+drivers, no SPI wiring. The C5's internal WiFi 6 OFDMA scheduler handles
+simultaneous traffic from multiple MCU boards efficiently.

@@ -1,3 +1,19 @@
+# ESP32-C5 specific overrides
+CONFIG_IDF_TARGET="esp32c5"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.esp32c5.csv"
+
+# C5 runs at 240MHz
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# USB OTG on C5 — full speed (USB HS not available on C5)
+CONFIG_USB_OTG_SUPPORTED=y
+
+# WiFi 6 (802.11ax) — C5 supports it natively
+CONFIG_ESP_WIFI_ENABLE_11AX=y
+
+# Disable SPIRAM — not fitted on DevKit V2
+CONFIG_SPIRAM=n
 # ESP-Hosted-FG slave: ESP32-C5 overrides for KlipperESPwifi
 # Processed LAST — overrides both sdkconfig.defaults and C5 chip defaults.
 

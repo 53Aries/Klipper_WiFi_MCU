@@ -1,3 +1,7 @@
+idf_component_register(
+    SRCS "main.c"
+    INCLUDE_DIRS "."
+)
 set(common_dir "../common")
 
 set(COMPONENT_SRCS

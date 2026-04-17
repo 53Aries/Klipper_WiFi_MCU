@@ -309,6 +309,9 @@ class SpiDriver:
                 rx_bytes = bytes(rx_raw)
                 frame = parse_frame(rx_bytes)
                 if frame and frame["cmd"] != CMD_NOOP:
+                    log.debug("RX cmd=0x%02x mcu=%d len=%d",
+                              frame["cmd"], frame["mcu_id"],
+                              len(frame["payload"]))
                     try:
                         self._rx_queue.put_nowait(frame)
                     except queue.Full:

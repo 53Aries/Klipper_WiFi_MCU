@@ -32,6 +32,7 @@ static const char *TAG = "tcp_client";
 /* ── State ───────────────────────────────────────────────────────────────── */
 
 static uint8_t           s_mcu_id;
+static uint8_t           s_mac[6];
 static tcp_client_rx_cb_t s_rx_cb;
 static int               s_fd = -1;
 static SemaphoreHandle_t s_fd_mutex;
@@ -240,21 +241,27 @@ static void tcp_client_task(void *pvParam) {
         xSemaphoreGive(s_fd_mutex);
         ESP_LOGI(TAG, "TCP connected to host (fd=%d)", fd);
 
-        /* Send CONNECT frame to identify ourselves. */
+        /* Send CONNECT frame: header + 6-byte MAC payload + CRC.
+         * The MAC lets the host log which physical board this is. */
         {
-            uint8_t hdr[KWM_TCP_HEADER_LEN];
-            hdr[0] = KWM_MAGIC_0;
-            hdr[1] = KWM_MAGIC_1;
-            hdr[2] = KWM_CMD_CONNECT;
-            hdr[3] = kwm_pack_id_flags(s_mcu_id, KWM_FLAG_NONE);
-            hdr[4] = 0; hdr[5] = 0;
-            kwm_put_be16(&hdr[6], 0);
-            uint16_t crc = kwm_crc16(hdr, KWM_TCP_HEADER_LEN);
-            uint8_t crc_bytes[2];
-            kwm_put_be16(crc_bytes, crc);
-            send(fd, hdr, KWM_TCP_HEADER_LEN, MSG_MORE);
-            send(fd, crc_bytes, 2, 0);
-            ESP_LOGI(TAG, "Sent CONNECT frame (mcu_id=%u)", s_mcu_id);
+            uint8_t frame[KWM_TCP_HEADER_LEN + KWM_MCU_ID_CONNECT_PAYLOAD_LEN
+                          + KWM_TCP_CRC_LEN];
+            frame[0] = KWM_MAGIC_0;
+            frame[1] = KWM_MAGIC_1;
+            frame[2] = KWM_CMD_CONNECT;
+            frame[3] = kwm_pack_id_flags(s_mcu_id, KWM_FLAG_NONE);
+            frame[4] = 0; frame[5] = 0;
+            kwm_put_be16(&frame[6], KWM_MCU_ID_CONNECT_PAYLOAD_LEN);
+            memcpy(&frame[8], s_mac, KWM_MCU_ID_CONNECT_PAYLOAD_LEN);
+            uint16_t crc = kwm_crc16(frame,
+                KWM_TCP_HEADER_LEN + KWM_MCU_ID_CONNECT_PAYLOAD_LEN);
+            kwm_put_be16(&frame[KWM_TCP_HEADER_LEN + KWM_MCU_ID_CONNECT_PAYLOAD_LEN],
+                         crc);
+            send(fd, frame, sizeof(frame), 0);
+            char mac_str[18];
+            snprintf(mac_str, sizeof(mac_str), "%02x:%02x:%02x:%02x:%02x:%02x",
+                     s_mac[0], s_mac[1], s_mac[2], s_mac[3], s_mac[4], s_mac[5]);
+            ESP_LOGI(TAG, "Sent CONNECT: mcu_id=%u  MAC=%s", s_mcu_id, mac_str);
         }
 
         /* Receive loop. */
@@ -295,8 +302,10 @@ static void tcp_client_task(void *pvParam) {
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 
-esp_err_t tcp_client_init(uint8_t mcu_id, tcp_client_rx_cb_t rx_cb) {
+esp_err_t tcp_client_init(uint8_t mcu_id, const uint8_t *mac,
+                          tcp_client_rx_cb_t rx_cb) {
     s_mcu_id  = mcu_id;
+    memcpy(s_mac, mac, 6);
     s_rx_cb   = rx_cb;
     s_fd      = -1;
     s_fd_mutex = xSemaphoreCreateMutex();

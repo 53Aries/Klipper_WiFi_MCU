@@ -2,7 +2,8 @@
  * tcp_client.h - TCP client connecting MCU ESP32-C5 to host ESP32-C5
  *
  * Connects to KWM_AP_IP:KWM_TCP_PORT, sends a KWM_CMD_CONNECT frame with
- * this MCU's ID, then bridges data frames bidirectionally.
+ * this MCU's ID (MAC-derived, 0-7) and the full 6-byte MAC address as payload,
+ * then bridges data frames bidirectionally.
  *
  * Reconnects automatically when the TCP connection drops.
  */
@@ -26,11 +27,14 @@ typedef void (*tcp_client_rx_cb_t)(const uint8_t *data, uint16_t len);
 /**
  * Start the TCP client task.
  *
- * @param mcu_id  This board's MCU ID (0-7); sent in CONNECT frame.
+ * @param mcu_id  This board's MCU ID (0-7), derived from MAC address.
+ * @param mac     This board's 6-byte hardware MAC address; included in
+ *                the CONNECT frame payload so the host can log the mapping.
  * @param rx_cb   Called on incoming DATA from host.
  * @return ESP_OK or error.
  */
-esp_err_t tcp_client_init(uint8_t mcu_id, tcp_client_rx_cb_t rx_cb);
+esp_err_t tcp_client_init(uint8_t mcu_id, const uint8_t *mac,
+                          tcp_client_rx_cb_t rx_cb);
 
 /**
  * Send raw serial bytes to the host ESP.

@@ -153,7 +153,18 @@ static bool rx_feed(rx_ctx_t *ctx, uint8_t byte, const tcp_server_rx_cb_t rx_cb)
             if (cmd == KWM_CMD_DATA && rx_cb && ctx->payload_len > 0) {
                 rx_cb(mcu_id, ctx->payload, ctx->payload_len);
             } else if (cmd == KWM_CMD_CONNECT) {
-                ESP_LOGI(TAG, "MCU %u sent CONNECT frame", mcu_id);
+                /* Log the MAC address if it was included in the payload. */
+                if (ctx->payload_len >= KWM_MCU_ID_CONNECT_PAYLOAD_LEN) {
+                    const uint8_t *m = ctx->payload;
+                    char mac_str[18];
+                    snprintf(mac_str, sizeof(mac_str),
+                             "%02x:%02x:%02x:%02x:%02x:%02x",
+                             m[0], m[1], m[2], m[3], m[4], m[5]);
+                    ESP_LOGI(TAG, "MCU %u connected  MAC=%s  → /dev/kwm%u",
+                             mcu_id, mac_str, mcu_id);
+                } else {
+                    ESP_LOGI(TAG, "MCU %u connected (no MAC in payload)", mcu_id);
+                }
             }
         }
         break;

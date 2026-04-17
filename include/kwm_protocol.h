@@ -75,6 +75,22 @@ typedef enum {
 /* ── Max MCU count ───────────────────────────────────────────────────────── */
 #define KWM_MAX_MCU         8
 
+/* ── MCU ID derivation (no pre-flash configuration needed) ──────────────────
+ *
+ * Each MCU-side ESP derives its ID at runtime from its hardware MAC address.
+ * The same firmware binary flashes onto every board.
+ *
+ * Algorithm: FNV-1a hash of the device-unique MAC bytes (octets 3-5; the
+ * first 3 bytes are the Espressif OUI and identical on every board from the
+ * same vendor), folded to KWM_MAX_MCU slots.
+ *
+ * The MCU ID is included in every TCP frame header AND the full 6-byte MAC is
+ * sent in the KWM_CMD_CONNECT payload so the host can log "MCU 3 = aa:bb:cc".
+ *
+ * MCU_ID_CONNECT_PAYLOAD_LEN is the expected CONNECT payload length.
+ * ─────────────────────────────────────────────────────────────────────────── */
+#define KWM_MCU_ID_CONNECT_PAYLOAD_LEN  6   /* 6 bytes: raw MAC address */
+
 /* ── TCP port ────────────────────────────────────────────────────────────── */
 #define KWM_TCP_PORT        8842
 

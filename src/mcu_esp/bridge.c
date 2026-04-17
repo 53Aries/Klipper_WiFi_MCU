@@ -47,13 +47,13 @@ static void on_tcp_rx(const uint8_t *data, uint16_t len) {
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 
-esp_err_t bridge_init(uint8_t mcu_id) {
+esp_err_t bridge_init(uint8_t mcu_id, const uint8_t *mac) {
     esp_err_t ret;
 
     ret = kwm_uart_init(on_uart_rx);
     if (ret != ESP_OK) return ret;
 
-    ret = tcp_client_init(mcu_id, on_tcp_rx);
+    ret = tcp_client_init(mcu_id, mac, on_tcp_rx);
     if (ret != ESP_OK) return ret;
 
     ESP_LOGI(TAG, "MCU bridge ready (id=%u, baud=%d, uart_tx=%d, uart_rx=%d)",

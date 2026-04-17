@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <stdint.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -17,13 +18,11 @@ extern "C" {
 /**
  * Initialise the bridge.
  *
- * Must be called after uart_hal_init() and tcp_client_init().
- * Registers callbacks so data flows automatically.
- *
- * @param mcu_id  This board's MCU ID.
+ * @param mcu_id  This board's MCU ID (0-7), derived from MAC address.
+ * @param mac     This board's 6-byte MAC address (passed to TCP CONNECT frame).
  * @return ESP_OK or error.
  */
-esp_err_t bridge_init(uint8_t mcu_id);
+esp_err_t bridge_init(uint8_t mcu_id, const uint8_t *mac);
 
 #ifdef __cplusplus
 }

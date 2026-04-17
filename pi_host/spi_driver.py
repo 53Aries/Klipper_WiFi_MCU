@@ -15,8 +15,7 @@ Hardware connections (default, match kwm_protocol.h pins for compact board):
   GPIO7 (BCM)     →   GPIO26 (HANDSHAKE:  Pi→ESP, active-high)  [optional]
 
 Install dependencies on Pi5:
-  sudo apt install python3-spidev python3-gpiod
-  # or: pip install spidev gpiod
+  sudo apt install python3-spidev python3-libgpiod
 
 Usage:
   from spi_driver import SpiDriver
@@ -39,8 +38,9 @@ except ImportError:
 
 try:
     import gpiod
+    from gpiod.line import Direction, Value
 except ImportError:
-    raise ImportError("Install gpiod: sudo apt install python3-gpiod")
+    raise ImportError("Install gpiod: sudo apt install python3-libgpiod")
 
 log = logging.getLogger(__name__)
 
@@ -153,10 +153,8 @@ class SpiDriver:
         self._pin_dr       = pin_data_ready
         self._pin_hs       = pin_handshake
 
-        self._spi:   Optional[spidev.SpiDev]         = None
-        self._chip:  Optional[gpiod.Chip]            = None
-        self._dr_line: Optional[gpiod.Line]          = None
-        self._hs_line: Optional[gpiod.Line]          = None
+        self._spi:      Optional[spidev.SpiDev] = None
+        self._gpio_req = None
 
         # Thread-safe queues for TX and RX frames.
         import queue
@@ -185,17 +183,16 @@ class SpiDriver:
         log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=3",
                  self._spi_bus, self._spi_device, self._spi_speed_hz)
 
-        # GPIO
-        self._chip = gpiod.Chip(self._gpio_chip)
-        self._dr_line = self._chip.get_line(self._pin_dr)
-        self._dr_line.request(consumer="kwm_data_ready",
-                              type=gpiod.LINE_REQ_DIR_IN)
-
-        self._hs_line = self._chip.get_line(self._pin_hs)
-        self._hs_line.request(consumer="kwm_handshake",
-                              type=gpiod.LINE_REQ_DIR_OUT,
-                              default_vals=[0])
-
+        # GPIO (gpiod v2 API)
+        self._gpio_req = gpiod.request_lines(
+            self._gpio_chip,
+            consumer="kwm_bridge",
+            config={
+                self._pin_dr: gpiod.LineSettings(direction=Direction.INPUT),
+                self._pin_hs: gpiod.LineSettings(direction=Direction.OUTPUT,
+                                                 output_value=Value.INACTIVE),
+            },
+        )
         log.info("GPIO ready: DATA_READY=GPIO%d HANDSHAKE=GPIO%d",
                  self._pin_dr, self._pin_hs)
 
@@ -211,8 +208,8 @@ class SpiDriver:
             self._thread.join(timeout=2.0)
         if self._spi:
             self._spi.close()
-        if self._chip:
-            self._chip.close()
+        if self._gpio_req:
+            self._gpio_req.release()
 
     def __enter__(self): self.open();  return self
     def __exit__(self, *_): self.close()
@@ -290,7 +287,7 @@ class SpiDriver:
         import queue
         log.info("SPI driver loop started")
         while self._running:
-            data_ready = self._dr_line.get_value()
+            data_ready = self._gpio_req.get_value(self._pin_dr) == Value.ACTIVE
             have_tx    = not self._tx_queue.empty()
 
             if data_ready or have_tx:

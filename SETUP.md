@@ -154,10 +154,8 @@ pio pkg install -g -p "https://github.com/pioarduino/platform-espressif32/releas
 
 ### On the Pi5
 
-```bash
-sudo apt update
-sudo apt install python3-spidev python3-gpiod git
-```
+See [section 7](#7-pi5-setup) for the full Pi5 configuration walkthrough
+(system update, package install, SPI enable, permissions, repo clone).
 
 ---
 
@@ -294,28 +292,98 @@ nvs_set kwm mcu_id u8 5
 
 ## 7. Pi5 Setup
 
-### Enable SPI
+Work through these steps in order on a fresh Pi OS Lite install.
+
+### Step 1 — Update the system
 
 ```bash
-sudo raspi-config
-# Interface Options → SPI → Enable
+sudo apt update && sudo apt upgrade -y
 sudo reboot
 ```
 
-Verify:
+### Step 2 — Install dependencies
+
+```bash
+sudo apt install -y python3-spidev python3-gpiod git
+```
+
+Verify Python 3 is available (Pi OS Lite ships with it, but worth confirming):
+
+```bash
+python3 --version
+# Python 3.11.x or newer
+```
+
+### Step 3 — Enable the SPI interface
+
+```bash
+sudo raspi-config
+# Interface Options → SPI → Enable → Finish → Yes (reboot when prompted)
+```
+
+Or non-interactively:
+
+```bash
+sudo raspi-config nonint do_spi 0
+sudo reboot
+```
+
+After reboot, verify the SPI device nodes appeared:
 
 ```bash
 ls /dev/spidev0.*
-# should show: /dev/spidev0.0  /dev/spidev0.1
+# Expected: /dev/spidev0.0  /dev/spidev0.1
 ```
 
-### GPIO chip
+If the files are missing, SPI was not enabled.  Check
+`/boot/firmware/config.txt` and confirm it contains `dtparam=spi=on`.
 
-Pi5 uses `/dev/gpiochip4` (not gpiochip0 as on older Pi models).  This is the
-default in `klipper_bridge.py` — no change needed unless you're on a different
-board.
+### Step 4 — Permissions
 
-### Clone the repo on the Pi (or copy `pi_host/`)
+#### SPI
+
+`/dev/spidev0.0` is owned by `root:spi` (mode 660).  The bridge daemon runs
+as root via systemd (section 11), so no change is needed for normal
+operation.
+
+For running the daemon **manually without `sudo`** (useful during testing),
+add your user to the `spi` group:
+
+```bash
+sudo usermod -aG spi $USER
+```
+
+#### GPIO
+
+`/dev/gpiochip4` is owned by `root:gpio` (mode 660).  Same situation — root
+is fine for the service, but add yourself to `gpio` for manual testing:
+
+```bash
+sudo usermod -aG gpio $USER
+```
+
+Apply both group changes in one go and re-login:
+
+```bash
+sudo usermod -aG spi,gpio $USER
+# Log out and back in, then verify:
+groups   # should include spi and gpio
+```
+
+### Step 5 — Verify GPIO chip
+
+Pi 5 uses `/dev/gpiochip4` (older Pi models use gpiochip0).  Confirm it
+exists:
+
+```bash
+ls /dev/gpiochip*
+# Should include /dev/gpiochip4
+```
+
+The bridge daemon defaults to `/dev/gpiochip4` — no configuration needed
+unless you are running on a non-Pi 5 board.
+
+### Step 6 — Clone the repository
 
 ```bash
 cd ~

@@ -304,19 +304,12 @@ sudo reboot
 ### Step 2 — Install dependencies
 
 ```bash
-sudo apt install -y python3-spidev python3-pip git
+sudo apt install -y python3-spidev python3-libgpiod git
 ```
 
-`python3-gpiod` is not in the apt repos on all Pi OS versions; install it
-via pip instead:
-
-```bash
-pip3 install gpiod --break-system-packages
-```
-
-> `--break-system-packages` is required on Pi OS Bookworm (Debian 12) when
-> installing outside a virtual environment.  It is safe here on a
-> dedicated Pi.
+> The GPIO Python bindings package is named `python3-libgpiod` on Pi OS
+> Bookworm and Trixie (not `python3-gpiod`).  Both install the same
+> `gpiod` Python module.
 
 Verify Python 3 is available (Pi OS Lite ships with it, but worth confirming):
 

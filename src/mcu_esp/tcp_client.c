@@ -15,6 +15,7 @@
 
 #include "tcp_client.h"
 #include "wifi_sta.h"
+#include "led_blink.h"
 
 #include <string.h>
 #include <errno.h>
@@ -240,6 +241,7 @@ static void tcp_client_task(void *pvParam) {
         s_fd = fd;
         xSemaphoreGive(s_fd_mutex);
         ESP_LOGI(TAG, "TCP connected to host (fd=%d)", fd);
+        led_blink_set(BLINK_TCP_CONNECTED);
 
         /* Send CONNECT frame: header + 6-byte MAC payload + CRC.
          * The MAC lets the host log which physical board this is. */
@@ -288,6 +290,7 @@ static void tcp_client_task(void *pvParam) {
         s_fd = -1;
         xSemaphoreGive(s_fd_mutex);
         close(fd);
+        led_blink_set(wifi_sta_connected() ? BLINK_WIFI_UP : BLINK_CONNECTING);
         s_retry_count++;
         uint32_t delay_ms = (s_retry_count <= 3) ? 500 :
                             (s_retry_count <= 8) ? 2000 : 5000;

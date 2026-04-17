@@ -30,6 +30,7 @@
 #include "kwm_uart.h"
 #include "wifi_sta.h"
 #include "bridge.h"
+#include "led_blink.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "main";
@@ -53,10 +54,13 @@ static uint8_t mac_to_mcu_id(const uint8_t mac[6]) {
 /* ── WiFi state callback ─────────────────────────────────────────────────── */
 
 static void on_wifi_state(bool connected) {
-    if (connected)
+    if (connected) {
         ESP_LOGI(TAG, "WiFi connected to host AP");
-    else
+        led_blink_set(BLINK_WIFI_UP);
+    } else {
         ESP_LOGW(TAG, "WiFi disconnected – TCP client will reconnect");
+        led_blink_set(BLINK_CONNECTING);
+    }
 }
 
 /* ── app_main ────────────────────────────────────────────────────────────── */
@@ -74,6 +78,9 @@ void app_main(void) {
     ESP_LOGI(TAG, "MCU ID = %u  (hash of MAC[3:5] mod %d)",
              mcu_id, KWM_MAX_MCU);
     ESP_LOGI(TAG, "Pi PTY will appear as /dev/kwm%u", mcu_id);
+
+    /* LED status indicator (single yellow LED on GPIO27). */
+    led_blink_init();   /* starts fast-blink: no WiFi yet */
 
     /* NVS. */
     esp_err_t nvs_ret = nvs_flash_init();

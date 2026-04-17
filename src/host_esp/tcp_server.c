@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdatomic.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -23,6 +24,7 @@
 #include "lwip/netdb.h"
 #include "esp_log.h"
 #include "kwm_protocol.h"
+#include "led_status.h"
 
 static const char *TAG = "tcp_server";
 
@@ -36,6 +38,7 @@ typedef struct {
 
 static mcu_conn_t  s_conns[KWM_MAX_MCU];
 static tcp_server_rx_cb_t s_rx_cb;
+static _Atomic int s_mcu_count = 0;
 
 /* ── Frame reassembly state ──────────────────────────────────────────────── */
 
@@ -285,6 +288,9 @@ static void mcu_conn_task(void *pvParam) {
     conn->active = true;
     xSemaphoreGive(conn->tx_mutex);
 
+    if (atomic_fetch_add(&s_mcu_count, 1) == 0)
+        led_status_set(LED_STATE_MCU_CONNECTED);
+
     ESP_LOGI(TAG, "MCU %u identified and registered on fd=%d", mcu_id, fd);
 
     /* TCP_NODELAY: disable Nagle — Klipper bytes must not be buffered.
@@ -328,6 +334,9 @@ static void mcu_conn_task(void *pvParam) {
     conn->fd     = -1;
     conn->active = false;
     xSemaphoreGive(conn->tx_mutex);
+
+    if (atomic_fetch_sub(&s_mcu_count, 1) == 1)
+        led_status_set(LED_STATE_WIFI_UP);
 
     close(fd);
     rx_ctx_free(&ctx);

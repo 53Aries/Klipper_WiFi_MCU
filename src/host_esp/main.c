@@ -20,6 +20,7 @@
 #include "kwm_spi.h"
 #include "wifi_ap.h"
 #include "bridge.h"
+#include "led_status.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "main";
@@ -50,6 +51,10 @@ void app_main(void) {
     ESP_LOGI(TAG, "Protocol: SPI frame %d bytes | TCP port %d | max MCUs %d",
              KWM_SPI_FRAME_LEN, KWM_TCP_PORT, KWM_MAX_MCU);
 
+    /* LED status indicator (WS2812 on GPIO27). */
+    led_status_init();
+    led_status_set(LED_STATE_BOOTING);
+
     /* NVS – required by WiFi. Erase if partition has been upgraded. */
     esp_err_t nvs_ret = nvs_flash_init();
     if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES ||
@@ -66,7 +71,13 @@ void app_main(void) {
 
     /* WiFi 6 AP. */
     ESP_LOGI(TAG, "Starting WiFi 6 AP...");
-    ESP_ERROR_CHECK(wifi_ap_init());
+    esp_err_t wifi_ret = wifi_ap_init();
+    if (wifi_ret != ESP_OK) {
+        led_status_set(LED_STATE_WIFI_ERROR);
+        vTaskDelay(pdMS_TO_TICKS(5000));   /* show red before abort */
+        ESP_ERROR_CHECK(wifi_ret);
+    }
+    led_status_set(LED_STATE_WIFI_UP);
 
     /* Bridge (TCP server + bridge tasks). */
     ESP_LOGI(TAG, "Starting bridge...");

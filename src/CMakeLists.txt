@@ -25,9 +25,12 @@ if("${BUILD_DIR}" MATCHES "/host_esp")
             "host_esp/wifi_ap.c"
             "host_esp/tcp_server.c"
             "host_esp/bridge.c"
+            "host_esp/led_status.c"
         INCLUDE_DIRS
             "host_esp"
             "${KWM_INCLUDE_DIR}"
+        REQUIRES
+            esp_driver_rmt
     )
 
 elseif("${BUILD_DIR}" MATCHES "/mcu_esp")
@@ -38,6 +41,7 @@ elseif("${BUILD_DIR}" MATCHES "/mcu_esp")
             "mcu_esp/wifi_sta.c"
             "mcu_esp/tcp_client.c"
             "mcu_esp/bridge.c"
+            "mcu_esp/led_blink.c"
         INCLUDE_DIRS
             "mcu_esp"
             "${KWM_INCLUDE_DIR}"

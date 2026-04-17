@@ -87,7 +87,7 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 |-----|-----------|-------|
 | 1 | **Raspberry Pi 5** (2GB+ RAM) | Host computer running Klipper |
 | 1 | **ESP32-C5 compact board** ("Super Mini") | Host ESP — SPI to Pi, WiFi AP |
-| 1+ | **ESP32-C5 DevKitC-1** | MCU ESP — one per Klipper MCU |
+| 1+ | **Seeed Studio XIAO ESP32C5** | MCU ESP — one per Klipper MCU |
 | 1+ | **STM32 Klipper MCU board** | e.g. SKR, Octopus, etc. |
 | — | Dupont/JST wires | SPI + GPIO from Pi to Host ESP |
 | — | UART wires (2) | TX/RX from MCU ESP to STM32 |
@@ -117,14 +117,14 @@ Pin 1             3.3 V      3.3 V                   Power (if not USB)
 > USB-powered in use, or powered from the Pi's 3.3 V rail if current allows
 > (the ESP32-C5 idle draw is ~20 mA, ~120 mA peak Tx).
 
-### MCU ESP32-C5 ↔ STM32 (UART)
+### MCU ESP32-C5 (XIAO) ↔ STM32 (UART)
 
 ```
-MCU ESP32-C5 Pin   STM32 Pin      Signal
+XIAO ESP32C5 Pin   STM32 Pin      Signal
 ─────────────────────────────────────────
-GPIO16 (TX)    →   UART RX pin    Serial data ESP→STM32
-GPIO17 (RX)    ←   UART TX pin    Serial data STM32→ESP
-GND            —   GND            Common ground
+D6 / GPIO11 (TX) →  UART RX pin   Serial data ESP→STM32
+D7 / GPIO12 (RX) ←  UART TX pin   Serial data STM32→ESP
+GND              —  GND           Common ground
 ```
 
 > The MCU ESP is powered via USB. It does not need a wired connection to the
@@ -226,7 +226,7 @@ I (xxx) bridge: Bridge initialised
 
 ---
 
-## 6. Build and Flash — MCU ESP32-C5
+## 6. Build and Flash — MCU ESP32-C5 (XIAO)
 
 **All MCU-side boards use the same firmware binary.** No per-device
 configuration is needed before flashing.  Each board derives its own MCU ID
@@ -244,9 +244,9 @@ Binary at:
 .pio/build/mcu_esp/firmware.factory.bin
 ```
 
-### Flash (repeat for every MCU ESP32-C5)
+### Flash (repeat for every XIAO ESP32C5)
 
-Connect the ESP32-C5 DevKitC-1 to your PC via USB.
+Connect the XIAO ESP32C5 to your PC via USB-C.
 
 ```powershell
 pio run -e mcu_esp -t upload

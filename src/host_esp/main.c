@@ -17,7 +17,7 @@
 #include "esp_chip_info.h"
 #include "esp_idf_version.h"
 
-#include "spi_slave_hal.h"
+#include "kwm_spi.h"
 #include "wifi_ap.h"
 #include "bridge.h"
 #include "kwm_protocol.h"
@@ -32,7 +32,7 @@ static void status_task(void *pvParam) {
         vTaskDelay(pdMS_TO_TICKS(10000));  /* log every 10 s */
         ESP_LOGI(TAG, "Heap free: %lu bytes | SPI rx pending: %d | WiFi STAs: %d",
                  (unsigned long)esp_get_free_heap_size(),
-                 spi_slave_hal_rx_pending(),
+                 kwm_spi_rx_pending(),
                  wifi_ap_station_count());
     }
 }
@@ -46,7 +46,7 @@ void app_main(void) {
     ESP_LOGI(TAG, "=== Klipper WiFi MCU - Host ESP32-C5 ===");
     ESP_LOGI(TAG, "IDF %s | cores=%d | flash=%dMB",
              IDF_VER, chip.cores,
-             (int)(2 << (chip.full_revision & 0x0F)));
+             (int)(2 << (chip.revision & 0x0F)));
     ESP_LOGI(TAG, "Protocol: SPI frame %d bytes | TCP port %d | max MCUs %d",
              KWM_SPI_FRAME_LEN, KWM_TCP_PORT, KWM_MAX_MCU);
 
@@ -62,7 +62,7 @@ void app_main(void) {
 
     /* SPI slave. */
     ESP_LOGI(TAG, "Initialising SPI slave...");
-    ESP_ERROR_CHECK(spi_slave_hal_init());
+    ESP_ERROR_CHECK(kwm_spi_init());
 
     /* WiFi 6 AP. */
     ESP_LOGI(TAG, "Starting WiFi 6 AP...");

@@ -24,6 +24,7 @@
 #include "esp_chip_info.h"
 #include "esp_idf_version.h"
 
+#include "kwm_uart.h"
 #include "wifi_sta.h"
 #include "bridge.h"
 #include "kwm_protocol.h"

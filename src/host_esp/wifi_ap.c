@@ -18,6 +18,7 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "lwip/ip4_addr.h"
 #include "kwm_protocol.h"
 
@@ -48,16 +49,21 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
     case WIFI_EVENT_AP_STACONNECTED: {
         const wifi_event_ap_staconnected_t *e = data;
         s_station_count++;
-        ESP_LOGI(TAG, "STA connected: " MACSTR " (AID %d), total=%d",
-                 MAC2STR(e->mac), e->aid, s_station_count);
+        /* IDF 5.5 log macros don't accept multi-token format strings (MACSTR
+         * expands to a literal but confuses the new structured-log preprocessor).
+         * Pre-format the MAC address instead. */
+        char mac[18];
+        snprintf(mac, sizeof(mac), "%02x:%02x:%02x:%02x:%02x:%02x", MAC2STR(e->mac));
+        ESP_LOGI(TAG, "STA connected: %s (AID %d), total=%d", mac, e->aid, s_station_count);
         break;
     }
     case WIFI_EVENT_AP_STADISCONNECTED: {
         const wifi_event_ap_stadisconnected_t *e = data;
         s_station_count--;
         if (s_station_count < 0) s_station_count = 0;
-        ESP_LOGI(TAG, "STA disconnected: " MACSTR " (AID %d), total=%d",
-                 MAC2STR(e->mac), e->aid, s_station_count);
+        char mac[18];
+        snprintf(mac, sizeof(mac), "%02x:%02x:%02x:%02x:%02x:%02x", MAC2STR(e->mac));
+        ESP_LOGI(TAG, "STA disconnected: %s (AID %d), total=%d", mac, e->aid, s_station_count);
         break;
     }
     default:

@@ -9,7 +9,7 @@
  */
 
 #include "bridge.h"
-#include "uart_hal.h"
+#include "kwm_uart.h"
 #include "tcp_client.h"
 
 #include <string.h>
@@ -40,9 +40,9 @@ static void on_uart_rx(const uint8_t *data, size_t len) {
 /* ── TCP → UART ──────────────────────────────────────────────────────────── */
 
 static void on_tcp_rx(const uint8_t *data, uint16_t len) {
-    esp_err_t ret = uart_hal_send(data, len);
+    esp_err_t ret = kwm_uart_send(data, len);
     if (ret != ESP_OK)
-        ESP_LOGW(TAG, "uart_hal_send failed: %s", esp_err_to_name(ret));
+        ESP_LOGW(TAG, "kwm_uart_send failed: %s", esp_err_to_name(ret));
 }
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
@@ -50,7 +50,7 @@ static void on_tcp_rx(const uint8_t *data, uint16_t len) {
 esp_err_t bridge_init(uint8_t mcu_id) {
     esp_err_t ret;
 
-    ret = uart_hal_init(on_uart_rx);
+    ret = kwm_uart_init(on_uart_rx);
     if (ret != ESP_OK) return ret;
 
     ret = tcp_client_init(mcu_id, on_tcp_rx);

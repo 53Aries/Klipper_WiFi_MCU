@@ -15,7 +15,7 @@
  */
 
 #include "bridge.h"
-#include "spi_slave_hal.h"
+#include "kwm_spi.h"
 #include "tcp_server.h"
 
 #include <string.h>
@@ -77,7 +77,7 @@ static void spi_to_tcp_task(void *pvParam) {
     ESP_LOGI(TAG, "spi_to_tcp task started");
 
     while (true) {
-        esp_err_t ret = spi_slave_hal_recv(s_rx_frame, portMAX_DELAY);
+        esp_err_t ret = kwm_spi_recv(s_rx_frame, portMAX_DELAY);
         if (ret != ESP_OK) continue;
 
         const kwm_spi_frame_t *f = (const kwm_spi_frame_t *)s_rx_frame;
@@ -117,12 +117,12 @@ static void tcp_to_spi_task(void *pvParam) {
         kwm_spi_frame_build(s_tx_frame,
                             KWM_CMD_DATA,
                             pkt.mcu_id,
-                            spi_slave_hal_tx_ready() ? KWM_FLAG_NONE : KWM_FLAG_MORE_DATA,
+                            kwm_spi_tx_ready() ? KWM_FLAG_NONE : KWM_FLAG_MORE_DATA,
                             s_tx_seq++,
                             pkt.data,
                             pkt.len);
 
-        esp_err_t ret = spi_slave_hal_send(s_tx_frame);
+        esp_err_t ret = kwm_spi_send(s_tx_frame);
         if (ret != ESP_OK)
             ESP_LOGW(TAG, "SPI send failed: %s", esp_err_to_name(ret));
     }

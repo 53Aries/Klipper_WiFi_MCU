@@ -391,7 +391,7 @@ unless you are running on a non-Pi 5 board.
 
 ```bash
 cd ~
-git clone https://github.com/53Aries/Klipper_WiFi_MCU.git
+git clone --branch Simple-ESP-Wifi --single-branch https://github.com/53Aries/Klipper_WiFi_MCU.git
 cd Klipper_WiFi_MCU
 ```
 

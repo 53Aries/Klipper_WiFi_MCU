@@ -405,13 +405,19 @@ Klipper starts.  It creates the `/dev/kwmN` symlinks that Klipper references.
 ### Basic usage
 
 ```bash
-sudo python3 pi_host/klipper_bridge.py --mcus 0 1
+sudo python3 pi_host/klipper_bridge.py
 ```
 
-`--mcus` lists the MCU IDs you expect to connect.  It must include every ID
-referenced in `printer.cfg`.  The daemon creates the PTY and symlink for each
-listed ID at startup — Klipper can open the PTY even before the MCU ESP
-physically connects.
+No arguments needed.  The daemon pre-creates PTY symlinks for all 8 possible
+MCU IDs (`/dev/kwm0` – `/dev/kwm7`) at startup.  Any MCU ESP that connects
+over WiFi is automatically routed to the correct slot.  Klipper can open the
+PTY even before the MCU ESP physically connects.
+
+If you want to restrict to specific IDs (e.g. to reduce log noise):
+
+```bash
+sudo python3 pi_host/klipper_bridge.py --mcus 0 3
+```
 
 ### All options
 
@@ -575,7 +581,7 @@ Before=klipper.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/pi/Klipper_WiFi_MCU/pi_host/klipper_bridge.py --mcus 0 1
+ExecStart=/usr/bin/python3 /home/pi/Klipper_WiFi_MCU/pi_host/klipper_bridge.py
 Restart=always
 RestartSec=3
 User=root
@@ -755,21 +761,16 @@ boot logs to confirm which MACs are colliding.
 
 ## 14. Adding More MCUs
 
-1. Flash a new ESP32-C5 DevKitC-1 with the `mcu_esp` binary (same file, no
+1. Flash a new XIAO ESP32C5 with the `mcu_esp` binary (same file, no
    re-build needed).
-2. Wire it to the new STM32 UART (TX→GPIO16, RX←GPIO17, common GND).
+2. Wire it to the new STM32 UART (TX→D6/GPIO11, RX←D7/GPIO12, common GND).
 3. Power it via USB.
 4. Read its boot log to find its auto-assigned MCU ID:
    ```
    I main: MCU ID = 5  (hash of MAC[3:5] mod 8)
    I main: Pi PTY will appear as /dev/kwm5
    ```
-5. Add the new ID to the bridge daemon's `--mcus` list and restart it:
-   ```bash
-   sudo systemctl edit kwm-bridge
-   # Change: ExecStart=... --mcus 0 1 5
-   sudo systemctl restart kwm-bridge
-   ```
+5. The bridge daemon already has `/dev/kwm5` ready — no restart needed.
 6. Add the new MCU to `printer.cfg`:
    ```ini
    [mcu mcu5]
@@ -777,4 +778,4 @@ boot logs to confirm which MACs are colliding.
    ```
 7. Restart Klipper.
 
-No reflashing of any existing board is required.
+No reflashing of any existing board and no daemon reconfiguration required.

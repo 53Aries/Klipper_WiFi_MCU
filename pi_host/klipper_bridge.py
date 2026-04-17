@@ -1,7 +1,7 @@
 """
 klipper_bridge.py - Pi5 daemon: SPI ↔ PTY bridge for Klipper
 
-Creates one Linux pseudo-terminal (PTY) per configured MCU ID.
+Creates one Linux pseudo-terminal (PTY) per MCU ID (0-7 by default).
 Klipper talks to each PTY as if it were a normal serial device.
 
 Klipper printer.cfg example:
@@ -11,15 +11,18 @@ Klipper printer.cfg example:
   [mcu mcu1]
   serial: /dev/kwm1
 
-Run:
-  sudo python3 klipper_bridge.py --mcus 0 1 2
+Run (no arguments needed — all 8 slots created automatically):
+  sudo python3 klipper_bridge.py
+
+Or restrict to specific IDs:
+  sudo python3 klipper_bridge.py --mcus 0 3
 
 The daemon creates /dev/kwm<N> symlinks pointing to the allocated PTY
 slave device (/dev/pts/X). Klipper can then be configured with these
 stable symlink paths instead of volatile /dev/pts/X numbers.
 
 Requirements:
-  sudo apt install python3-spidev python3-gpiod
+  sudo apt install python3-spidev python3-libgpiod
 """
 
 import argparse
@@ -183,9 +186,9 @@ class KlipperBridge:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Klipper WiFi MCU SPI↔PTY bridge daemon")
-    parser.add_argument("--mcus", nargs="+", type=int, default=[0],
+    parser.add_argument("--mcus", nargs="+", type=int, default=list(range(8)),
                         metavar="ID",
-                        help="MCU IDs to bridge (e.g. --mcus 0 1 2)")
+                        help="MCU IDs to bridge (default: all 8, i.e. 0-7)")
     parser.add_argument("--spi-bus",    type=int, default=0)
     parser.add_argument("--spi-dev",    type=int, default=0)
     parser.add_argument("--spi-speed",  type=int, default=10_000_000,

@@ -18,6 +18,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <inttypes.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -35,6 +36,7 @@ static tcp_client_rx_cb_t s_rx_cb;
 static int               s_fd = -1;
 static SemaphoreHandle_t s_fd_mutex;
 static uint8_t           s_tx_seq;
+static int               s_retry_count;
 
 /* ── Frame reassembly (reuse same state machine logic as tcp_server) ─────── */
 
@@ -209,17 +211,28 @@ static void tcp_client_task(void *pvParam) {
             continue;
         }
 
-        /* TCP keepalive so we detect stale connections. */
-        int ka = 1;
-        setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof(ka));
-
         ESP_LOGI(TAG, "Connecting to host %s:%d...", KWM_AP_IP, KWM_TCP_PORT);
         if (connect(fd, (struct sockaddr *)&host_addr, sizeof(host_addr)) < 0) {
             ESP_LOGW(TAG, "connect() failed: errno=%d", errno);
             close(fd);
-            vTaskDelay(pdMS_TO_TICKS(3000));
+            /* Backoff: 1 s for first 5 attempts, 5 s after that. */
+            vTaskDelay(pdMS_TO_TICKS(s_retry_count <= 5 ? 1000 : 5000));
+            s_retry_count++;
             continue;
         }
+        s_retry_count = 0;
+
+        /* TCP_NODELAY: disable Nagle — Klipper bytes must not be buffered. */
+        int flag = 1;
+        setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+
+        /* TCP keepalive: detect dead connections in ~11 s.
+         * idle=5 s, interval=2 s, count=3 → fail after 5+3×2=11 s. */
+        int ka = 1, ka_idle = 5, ka_intvl = 2, ka_cnt = 3;
+        setsockopt(fd, SOL_SOCKET,  SO_KEEPALIVE,  &ka,      sizeof(ka));
+        setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE,  &ka_idle, sizeof(ka_idle));
+        setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &ka_intvl,sizeof(ka_intvl));
+        setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT,   &ka_cnt,  sizeof(ka_cnt));
 
         /* Register fd. */
         xSemaphoreTake(s_fd_mutex, portMAX_DELAY);
@@ -268,8 +281,12 @@ static void tcp_client_task(void *pvParam) {
         s_fd = -1;
         xSemaphoreGive(s_fd_mutex);
         close(fd);
-        ESP_LOGI(TAG, "TCP disconnected, retrying in 3 s...");
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        s_retry_count++;
+        uint32_t delay_ms = (s_retry_count <= 3) ? 500 :
+                            (s_retry_count <= 8) ? 2000 : 5000;
+        ESP_LOGI(TAG, "TCP disconnected, reconnecting in %"PRIu32" ms (attempt %d)...",
+                 delay_ms, s_retry_count);
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 
     rx_ctx_free(&ctx);

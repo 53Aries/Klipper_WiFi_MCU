@@ -14,6 +14,7 @@
 #include "tcp_server.h"
 
 #include <string.h>
+#include <stdlib.h>
 #include <errno.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -174,36 +175,37 @@ esp_err_t tcp_server_send(uint8_t mcu_id, const uint8_t *data, uint16_t len) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    /* Build frame: header (8) + payload (len) + CRC (2). */
-    static uint8_t s_tx_scratch[KWM_TCP_HEADER_LEN + KWM_TCP_PAYLOAD_MAX + KWM_TCP_CRC_LEN];
-    static SemaphoreHandle_t s_scratch_mutex;
-    static bool s_scratch_init;
-    if (!s_scratch_init) {
-        s_scratch_mutex = xSemaphoreCreateMutex();
-        s_scratch_init = true;
+    /* Build frame per-send on the heap – avoids a shared scratch buffer that
+     * would serialize sends to different MCUs. */
+    size_t total = KWM_TCP_HEADER_LEN + len + KWM_TCP_CRC_LEN;
+    uint8_t *frame = malloc(total);
+    if (!frame) {
+        xSemaphoreGive(conn->tx_mutex);
+        return ESP_ERR_NO_MEM;
     }
 
-    xSemaphoreTake(s_scratch_mutex, portMAX_DELAY);
-
-    s_tx_scratch[0] = KWM_MAGIC_0;
-    s_tx_scratch[1] = KWM_MAGIC_1;
-    s_tx_scratch[2] = KWM_CMD_DATA;
-    s_tx_scratch[3] = kwm_pack_id_flags(mcu_id, KWM_FLAG_NONE);
-    s_tx_scratch[4] = 0;   /* seq – could track per-MCU */
-    s_tx_scratch[5] = 0;
-    kwm_put_be16(&s_tx_scratch[6], len);
+    frame[0] = KWM_MAGIC_0;
+    frame[1] = KWM_MAGIC_1;
+    frame[2] = KWM_CMD_DATA;
+    frame[3] = kwm_pack_id_flags(mcu_id, KWM_FLAG_NONE);
+    frame[4] = 0;   /* seq – TODO: track per-MCU */
+    frame[5] = 0;
+    kwm_put_be16(&frame[6], len);
     if (len && data)
-        memcpy(&s_tx_scratch[8], data, len);
-    uint16_t crc = kwm_crc16(s_tx_scratch, KWM_TCP_HEADER_LEN + len);
-    kwm_put_be16(&s_tx_scratch[KWM_TCP_HEADER_LEN + len], crc);
+        memcpy(&frame[8], data, len);
+    uint16_t crc = kwm_crc16(frame, KWM_TCP_HEADER_LEN + len);
+    kwm_put_be16(&frame[KWM_TCP_HEADER_LEN + len], crc);
 
-    size_t total = KWM_TCP_HEADER_LEN + len + KWM_TCP_CRC_LEN;
-    int sent = send(conn->fd, s_tx_scratch, total, MSG_DONTWAIT);
-    xSemaphoreGive(s_scratch_mutex);
+    /* Blocking send – SO_SNDTIMEO set on the socket limits wait to 200 ms.
+     * Using MSG_DONTWAIT here would silently drop data; Klipper cannot
+     * tolerate any byte loss. */
+    int sent = send(conn->fd, frame, total, 0);
+    free(frame);
     xSemaphoreGive(conn->tx_mutex);
 
-    if (sent < 0) {
-        ESP_LOGW(TAG, "TCP send to MCU %u failed: errno=%d", mcu_id, errno);
+    if (sent != (int)total) {
+        ESP_LOGW(TAG, "TCP send to MCU %u incomplete (%d/%d): errno=%d",
+                 mcu_id, sent, (int)total, errno);
         return ESP_FAIL;
     }
     return ESP_OK;
@@ -274,7 +276,24 @@ static void mcu_conn_task(void *pvParam) {
 
     ESP_LOGI(TAG, "MCU %u identified and registered on fd=%d", mcu_id, fd);
 
-    /* Set socket to blocking with a short timeout for the receive loop. */
+    /* TCP_NODELAY: disable Nagle — Klipper bytes must not be buffered.
+     * Without this, lwIP waits up to 40 ms for more data before sending. */
+    int flag = 1;
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+
+    /* SO_SNDTIMEO: bound blocking sends to 200 ms. Without this, a slow
+     * MCU could stall the bridge task indefinitely. */
+    struct timeval sndtv = { .tv_sec = 0, .tv_usec = 200000 };
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &sndtv, sizeof(sndtv));
+
+    /* TCP keepalive: detect dead MCU connections in ~11 s. */
+    int ka = 1, ka_idle = 5, ka_intvl = 2, ka_cnt = 3;
+    setsockopt(fd, SOL_SOCKET,  SO_KEEPALIVE,  &ka,      sizeof(ka));
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE,  &ka_idle, sizeof(ka_idle));
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &ka_intvl,sizeof(ka_intvl));
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT,   &ka_cnt,  sizeof(ka_cnt));
+
+    /* Receive timeout for the main loop. */
     struct timeval tv = { .tv_sec = 0, .tv_usec = 100000 };  /* 100 ms */
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 

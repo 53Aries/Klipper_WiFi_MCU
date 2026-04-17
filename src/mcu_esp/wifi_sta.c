@@ -25,7 +25,6 @@ static EventGroupHandle_t  s_wifi_events;
 static wifi_sta_state_cb_t s_state_cb;
 static bool                s_connected;
 static int                 s_retry_count;
-#define MAX_RETRIES  10
 
 /* ── Event handler ───────────────────────────────────────────────────────── */
 
@@ -39,15 +38,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
 
         case WIFI_EVENT_STA_DISCONNECTED: {
             s_connected = false;
+            xEventGroupClearBits(s_wifi_events, WIFI_CONNECTED_BIT);
             if (s_state_cb) s_state_cb(false);
-            if (s_retry_count < MAX_RETRIES) {
-                s_retry_count++;
-                ESP_LOGI(TAG, "Reconnecting (attempt %d/%d)...", s_retry_count, MAX_RETRIES);
-                esp_wifi_connect();
-            } else {
-                ESP_LOGW(TAG, "Max retries reached");
-                xEventGroupSetBits(s_wifi_events, WIFI_FAIL_BIT);
-            }
+            s_retry_count++;
+            /* Always reconnect — Klipper needs the link permanently up.
+             * The WiFi driver handles its own retry backoff internally. */
+            ESP_LOGI(TAG, "Disconnected, reconnecting (attempt %d)...", s_retry_count);
+            esp_wifi_connect();
             break;
         }
         default:
@@ -58,6 +55,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&e->ip_info.ip));
         s_retry_count = 0;
         s_connected   = true;
+        xEventGroupClearBits(s_wifi_events, WIFI_FAIL_BIT);
         xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
         if (s_state_cb) s_state_cb(true);
     }
@@ -100,6 +98,11 @@ esp_err_t wifi_sta_init(wifi_sta_state_cb_t state_cb) {
                         WIFI_PROTOCOL_11N | WIFI_PROTOCOL_11AX);
     if (ret != ESP_OK)
         ESP_LOGW(TAG, "WiFi 6 protocol set failed: %s (continuing)", esp_err_to_name(ret));
+
+    /* Disable power save: Klipper requires consistent low-latency delivery.
+     * WIFI_PS_MIN_MODEM (default) can add up to beacon_interval (100 ms)
+     * of receive latency per packet. WIFI_PS_NONE removes that entirely. */
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
     ESP_ERROR_CHECK(esp_wifi_start());
 

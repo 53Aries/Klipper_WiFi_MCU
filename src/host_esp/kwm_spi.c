@@ -117,9 +117,9 @@ esp_err_t kwm_spi_init(void) {
              KWM_PIN_MOSI, KWM_PIN_MISO, KWM_PIN_SCLK, KWM_PIN_CS,
              KWM_PIN_DATA_READY, KWM_PIN_HANDSHAKE);
 
-    /* Spawn the SPI driver task on core 1 to avoid contention with WiFi. */
-    BaseType_t rc = xTaskCreatePinnedToCore(
-        spi_slave_task, "kwm_spi", 4096, NULL, 10, NULL, 1);
+    /* ESP32-C5 is single-core RISC-V — use xTaskCreate (no core pinning). */
+    BaseType_t rc = xTaskCreate(
+        spi_slave_task, "kwm_spi", 4096, NULL, 10, NULL);
     if (rc != pdPASS) {
         ESP_LOGE(TAG, "Failed to create SPI task");
         return ESP_FAIL;

@@ -11,8 +11,8 @@ Hardware connections (default, match kwm_protocol.h pins for compact board):
   MISO  (pin 21)  ←   GPIO2  (FSPIQ)
   SCLK  (pin 23)  →   GPIO6  (FSPICLK)
   CE0   (pin 24)  →   GPIO10 (FSPICS0, active-low CS)
-  GPIO8 (BCM)     ←   GPIO25 (DATA_READY: ESP→Pi, active-high interrupt)
-  GPIO7 (BCM)     →   GPIO26 (HANDSHAKE:  Pi→ESP, active-high)  [optional]
+  GPIO25 (BCM)    ←   GPIO25 (DATA_READY: ESP→Pi, active-high interrupt)
+  GPIO24 (BCM)    →   GPIO26 (HANDSHAKE:  Pi→ESP, active-high)  [optional]
 
 Install dependencies on Pi5:
   sudo apt install python3-spidev python3-libgpiod
@@ -143,8 +143,8 @@ class SpiDriver:
         spi_device:   int = 0,
         spi_speed_hz: int = 10_000_000,
         gpio_chip:    str = "/dev/gpiochip4",  # Pi5 main GPIO chip
-        pin_data_ready: int = 8,   # BCM GPIO number for DATA_READY input
-        pin_handshake:  int = 7,   # BCM GPIO number for HANDSHAKE output
+        pin_data_ready: int = 25,  # BCM GPIO number for DATA_READY input
+        pin_handshake:  int = 24,  # BCM GPIO number for HANDSHAKE output
     ):
         self._spi_bus      = spi_bus
         self._spi_device   = spi_device

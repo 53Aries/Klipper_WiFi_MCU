@@ -35,8 +35,8 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 │       │  /dev/kwm0   /dev/kwm1  …  PTY symlinks                 │
 │  klipper_bridge.py  ←──── spi_driver.py                         │
 │       │                        │                                 │
-│  GPIO8 (DATA_READY ←)     SPI0 (MOSI/MISO/SCLK/CE0)            │
-│  GPIO7 (HANDSHAKE  →)                                            │
+│  GPIO25 (DATA_READY ←)    SPI0 (MOSI/MISO/SCLK/CE0)            │
+│  GPIO24 (HANDSHAKE  →)                                           │
 └──────────────────────────────┬──────────────────────────────────┘
                                │  256-byte SPI frames (10 MHz)
                                │  Full-duplex, SPI mode 3
@@ -107,11 +107,15 @@ Pin 19            MOSI       GPIO7  (FSPID)          SPI data Pi→ESP
 Pin 21            MISO       GPIO2  (FSPIQ)          SPI data ESP→Pi
 Pin 23            SCLK       GPIO6  (FSPICLK)        SPI clock
 Pin 24            CE0        GPIO10 (FSPICS0)        SPI chip-select
-Pin 8   (BCM 8)   GPIO8      GPIO25                  DATA_READY (ESP→Pi)
-Pin 26  (BCM 7)   GPIO7      GPIO26                  HANDSHAKE  (Pi→ESP)
+Pin 22  (BCM 25)  GPIO25     GPIO25                  DATA_READY (ESP→Pi)
+Pin 18  (BCM 24)  GPIO24     GPIO26                  HANDSHAKE  (Pi→ESP)
 Pin 6             GND        GND                     Common ground
 Pin 1             3.3 V      3.3 V                   Power (if not USB)
 ```
+
+> **Note:** BCM GPIO8 (pin 24) and GPIO7 (pin 26) are the SPI CE0/CE1 lines
+> and are claimed by the kernel SPI driver.  DATA_READY and HANDSHAKE must
+> use different pins.
 
 > The Host ESP is powered via its USB connector for flashing and can remain
 > USB-powered in use, or powered from the Pi's 3.3 V rail if current allows

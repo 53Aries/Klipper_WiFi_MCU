@@ -121,8 +121,8 @@ typedef enum {
 #define KWM_PIN_MISO        2    /* GPIO2  = FSPIQ                           */
 #define KWM_PIN_SCLK        6    /* GPIO6  = FSPICLK                         */
 #define KWM_PIN_CS          10   /* GPIO10 = FSPICS0                         */
-#define KWM_PIN_DATA_READY  25   /* GPIO25, output → Pi GPIO8 (BCM)          */
-#define KWM_PIN_HANDSHAKE   26   /* GPIO26, input  ← Pi GPIO7 (BCM)          */
+#define KWM_PIN_DATA_READY  25   /* GPIO25, output → Pi BCM GPIO25 (pin 22)  */
+#define KWM_PIN_HANDSHAKE   26   /* GPIO26, input  ← Pi BCM GPIO24 (pin 18)  */
 
 /* ── Frame structs ───────────────────────────────────────────────────────── */
 

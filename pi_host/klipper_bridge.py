@@ -195,9 +195,9 @@ def main() -> None:
                         help="SPI clock Hz (default 10 MHz)")
     parser.add_argument("--gpio-chip",  default="/dev/gpiochip4",
                         help="GPIO chip device (Pi5 default: gpiochip4)")
-    parser.add_argument("--pin-dr",     type=int, default=8,
+    parser.add_argument("--pin-dr",     type=int, default=25,
                         help="BCM GPIO for DATA_READY input from ESP32-C5")
-    parser.add_argument("--pin-hs",     type=int, default=7,
+    parser.add_argument("--pin-hs",     type=int, default=24,
                         help="BCM GPIO for HANDSHAKE output to ESP32-C5")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()

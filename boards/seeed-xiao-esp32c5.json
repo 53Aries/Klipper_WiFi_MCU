@@ -1,7 +1,7 @@
 {
   "build": {
     "core": "esp32",
-    "f_cpu": "160000000L",
+    "f_cpu": "240000000L",
     "f_flash": "80000000L",
     "flash_mode": "qio",
     "mcu": "esp32c5",
@@ -19,9 +19,9 @@
   ],
   "name": "Seeed Studio XIAO ESP32C5",
   "upload": {
-    "flash_size": "4MB",
+    "flash_size": "8MB",
     "maximum_ram_size": 393216,
-    "maximum_size": 4194304,
+    "maximum_size": 8388608,
     "require_upload_port": true,
     "speed": 460800
   },

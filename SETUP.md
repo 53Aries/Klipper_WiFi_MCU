@@ -399,14 +399,56 @@ git clone --branch Simple-ESP-Wifi --single-branch https://github.com/53Aries/Kl
 cd Klipper_WiFi_MCU
 ```
 
+### Step 7 — Install the bridge service
+
+Create `/etc/systemd/system/kwm-bridge.service`:
+
+```bash
+sudo tee /etc/systemd/system/kwm-bridge.service > /dev/null << EOF
+[Unit]
+Description=Klipper WiFi MCU SPI bridge daemon
+After=network.target
+Before=klipper.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 $(pwd)/pi_host/klipper_bridge.py
+Restart=always
+RestartSec=3
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+> Run this command from inside the `Klipper_WiFi_MCU` directory so that
+> `$(pwd)` resolves to the correct path.
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable kwm-bridge
+sudo systemctl start kwm-bridge
+sudo systemctl status kwm-bridge
+```
+
+The service will now start automatically on every boot, before Klipper.
+Check logs at any time with:
+
+```bash
+sudo journalctl -u kwm-bridge -f
+```
+
 ---
 
 ## 8. Running the Bridge Daemon
 
-The bridge daemon (`pi_host/klipper_bridge.py`) must be running before
-Klipper starts.  It creates the `/dev/kwmN` symlinks that Klipper references.
-
-### Basic usage
+> The systemd service (section 7, step 7) is the normal way to run the
+> bridge.  Use the manual invocation below only for debugging.
 
 ```bash
 sudo python3 pi_host/klipper_bridge.py
@@ -417,29 +459,17 @@ MCU IDs (`/dev/kwm0` – `/dev/kwm7`) at startup.  Any MCU ESP that connects
 over WiFi is automatically routed to the correct slot.  Klipper can open the
 PTY even before the MCU ESP physically connects.
 
-If you want to restrict to specific IDs (e.g. to reduce log noise):
-
-```bash
-sudo python3 pi_host/klipper_bridge.py --mcus 0 3
-```
-
 ### All options
 
 ```
---mcus ID [ID ...]     MCU IDs to bridge (default: 0)
+--mcus ID [ID ...]     MCU IDs to bridge (default: all 8, i.e. 0-7)
 --spi-bus N            SPI bus number (default: 0)
 --spi-dev N            SPI device/CE number (default: 0)
 --spi-speed HZ         SPI clock in Hz (default: 10000000 = 10 MHz)
 --gpio-chip PATH       GPIO chip device (default: /dev/gpiochip4)
---pin-dr BCM           BCM GPIO for DATA_READY input (default: 8)
---pin-hs BCM           BCM GPIO for HANDSHAKE output (default: 7)
+--pin-dr BCM           BCM GPIO for DATA_READY input (default: 25)
+--pin-hs BCM           BCM GPIO for HANDSHAKE output (default: 24)
 --verbose / -v         Enable debug logging
-```
-
-### Example: 3 MCUs, verbose
-
-```bash
-sudo python3 pi_host/klipper_bridge.py --mcus 0 1 3 -v
 ```
 
 ### Expected startup output
@@ -574,49 +604,8 @@ EOF
 
 ## 11. Systemd Service (Auto-start)
 
-Create `/etc/systemd/system/kwm-bridge.service`:
-
-```ini
-[Unit]
-Description=Klipper WiFi MCU SPI bridge daemon
-After=network.target
-# Ensure bridge is up before Klipper tries to open serial ports
-Before=klipper.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/python3 /home/pi/Klipper_WiFi_MCU/pi_host/klipper_bridge.py
-Restart=always
-RestartSec=3
-User=root
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-> Replace `/home/pi/Klipper_WiFi_MCU` with your actual clone path.
-> Replace `--mcus 0 1` with the IDs of your actual boards.
-
-Enable and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable kwm-bridge
-sudo systemctl start kwm-bridge
-sudo systemctl status kwm-bridge
-```
-
-### Make Klipper wait for the bridge
-
-Edit `/etc/systemd/system/klipper.service` (or the moonraker-managed equivalent)
-and add to the `[Unit]` section:
-
-```ini
-After=kwm-bridge.service
-Requires=kwm-bridge.service
-```
+See [section 7, step 7](#step-7--install-the-bridge-service) — the service
+is installed as part of the Pi5 setup.
 
 ---
 

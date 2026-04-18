@@ -31,16 +31,18 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_cache.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "kwm_spi";
 
 /* ── Internal state ──────────────────────────────────────────────────────── */
 
-/* DMA buffers in DRAM. esp_cache_msync() flushes/invalidates around each
- * transaction so DMA always sees the data the CPU wrote (and vice versa). */
-WORD_ALIGNED_ATTR static uint8_t s_tx_dma_buf[KWM_SPI_FRAME_LEN];
-WORD_ALIGNED_ATTR static uint8_t s_rx_dma_buf[KWM_SPI_FRAME_LEN];
+/* DMA buffers must be 64-byte aligned (ESP32-C5 dcache line size).
+ * esp_cache_msync() requires this alignment; WORD_ALIGNED_ATTR (4 bytes)
+ * is not sufficient and causes "invalid addr" errors. */
+static uint8_t s_tx_dma_buf[KWM_SPI_FRAME_LEN] __attribute__((aligned(64)));
+static uint8_t s_rx_dma_buf[KWM_SPI_FRAME_LEN] __attribute__((aligned(64)));
 
 /* Ring queues of heap-allocated frame copies. */
 static QueueHandle_t s_tx_queue;   /* frames waiting to go to Pi  */
@@ -214,17 +216,25 @@ static void spi_slave_task(void *pvParam) {
             .rx_buffer = s_rx_dma_buf,
         };
 
-        /* Block until Pi initiates a transaction (CS falling edge).
-         * IDF 5.x spi_slave_transmit handles cache coherency internally
-         * for static DRAM buffers — no manual esp_cache_msync needed. */
+        /* Flush TX buffer from L1 cache to DRAM so DMA reads fresh data.
+         * Requires 64-byte aligned buffer (ESP32-C5 dcache line size). */
+        esp_cache_msync(s_tx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+
+        /* Block until Pi initiates a transaction (CS falling edge). */
         esp_err_t ret = spi_slave_transmit(KWM_SPI_HOST, &t, portMAX_DELAY);
+
+        /* Invalidate RX buffer in L1 cache so CPU reads DMA-written DRAM data. */
+        if (ret == ESP_OK)
+            esp_cache_msync(s_rx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "spi_slave_transmit error: %s", esp_err_to_name(ret));
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
-        ESP_LOGI(TAG, "SPI txn done: rx[0:7]=%02x %02x %02x %02x %02x %02x %02x %02x",
+        ESP_LOGI(TAG, "SPI txn done: bits=%d rx[0:7]=%02x %02x %02x %02x %02x %02x %02x %02x",
+                 t.trans_len,
                  s_rx_dma_buf[0], s_rx_dma_buf[1], s_rx_dma_buf[2], s_rx_dma_buf[3],
                  s_rx_dma_buf[4], s_rx_dma_buf[5], s_rx_dma_buf[6], s_rx_dma_buf[7]);
 

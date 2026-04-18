@@ -207,8 +207,8 @@ def main() -> None:
                         help="BCM GPIO for DATA_READY input from ESP32-C5")
     parser.add_argument("--pin-hs",     type=int, default=24,
                         help="BCM GPIO for HANDSHAKE output to ESP32-C5")
-    parser.add_argument("--pin-cs",     type=int, default=8,
-                        help="BCM GPIO for manual CS/CE0 (Pi5 RP1 workaround, default 8)")
+    parser.add_argument("--pin-cs",     type=int, default=17,
+                        help="BCM GPIO for manual CS (free GPIO, NOT CE0 — Pi5 RP1 workaround, default 17/pin11)")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 

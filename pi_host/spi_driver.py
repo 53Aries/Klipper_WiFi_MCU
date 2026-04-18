@@ -145,7 +145,7 @@ class SpiDriver:
         gpio_chip:    str = "/dev/gpiochip4",  # Pi5 main GPIO chip
         pin_data_ready: int = 25,  # BCM GPIO number for DATA_READY input
         pin_handshake:  int = 24,  # BCM GPIO number for HANDSHAKE output
-        pin_cs:         int = 8,   # BCM GPIO number for manual CS (CE0)
+        pin_cs:         int = 17,  # BCM GPIO number for manual CS (free GPIO, NOT CE0)
     ):
         self._spi_bus      = spi_bus
         self._spi_device   = spi_device
@@ -181,10 +181,9 @@ class SpiDriver:
         self._spi.max_speed_hz = self._spi_speed_hz
         self._spi.mode         = 0    # CPOL=0, CPHA=0
         self._spi.bits_per_word = 8
-        # Pi5 RP1 bug: hardware CS toggles HIGH after every 8-bit word,
-        # breaking multi-byte SPI slave transactions (github.com/raspberrypi/linux/issues/6354).
-        # Workaround: disable hardware CS and drive CE0 manually via gpiod.
-        self._spi.no_cs        = True
+        # Leave hardware CE0 (BCM8/pin24) disconnected from ESP — RP1 bug
+        # toggles it per-word (github.com/raspberrypi/linux/issues/6354).
+        # CS is driven manually via a free GPIO (BCM17/pin11) through gpiod.
         log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=%d (manual CS on BCM%d)",
                  self._spi_bus, self._spi_device, self._spi_speed_hz,
                  self._spi.mode, self._pin_cs)

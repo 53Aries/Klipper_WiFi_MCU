@@ -207,6 +207,8 @@ def main() -> None:
                         help="BCM GPIO for DATA_READY input from ESP32-C5")
     parser.add_argument("--pin-hs",     type=int, default=24,
                         help="BCM GPIO for HANDSHAKE output to ESP32-C5")
+    parser.add_argument("--pin-cs",     type=int, default=8,
+                        help="BCM GPIO for manual CS/CE0 (Pi5 RP1 workaround, default 8)")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
@@ -220,6 +222,7 @@ def main() -> None:
         "gpio_chip":      args.gpio_chip,
         "pin_data_ready": args.pin_dr,
         "pin_handshake":  args.pin_hs,
+        "pin_cs":         args.pin_cs,
     }
 
     bridge = KlipperBridge(mcu_ids=args.mcus, spi_kwargs=spi_kwargs)

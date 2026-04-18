@@ -145,6 +145,7 @@ class SpiDriver:
         gpio_chip:    str = "/dev/gpiochip4",  # Pi5 main GPIO chip
         pin_data_ready: int = 25,  # BCM GPIO number for DATA_READY input
         pin_handshake:  int = 24,  # BCM GPIO number for HANDSHAKE output
+        pin_cs:         int = 8,   # BCM GPIO number for manual CS (CE0)
     ):
         self._spi_bus      = spi_bus
         self._spi_device   = spi_device
@@ -152,6 +153,7 @@ class SpiDriver:
         self._gpio_chip    = gpio_chip
         self._pin_dr       = pin_data_ready
         self._pin_hs       = pin_handshake
+        self._pin_cs       = pin_cs
 
         self._spi:      Optional[spidev.SpiDev] = None
         self._gpio_req = None
@@ -179,11 +181,15 @@ class SpiDriver:
         self._spi.max_speed_hz = self._spi_speed_hz
         self._spi.mode         = 0    # CPOL=0, CPHA=0
         self._spi.bits_per_word = 8
-        self._spi.no_cs        = False
-        log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=%d",
-                 self._spi_bus, self._spi_device, self._spi_speed_hz, self._spi.mode)
+        # Pi5 RP1 bug: hardware CS toggles HIGH after every 8-bit word,
+        # breaking multi-byte SPI slave transactions (github.com/raspberrypi/linux/issues/6354).
+        # Workaround: disable hardware CS and drive CE0 manually via gpiod.
+        self._spi.no_cs        = True
+        log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=%d (manual CS on BCM%d)",
+                 self._spi_bus, self._spi_device, self._spi_speed_hz,
+                 self._spi.mode, self._pin_cs)
 
-        # GPIO (gpiod v2 API)
+        # GPIO (gpiod v2 API) — includes manual CS pin.
         self._gpio_req = gpiod.request_lines(
             self._gpio_chip,
             consumer="kwm_bridge",
@@ -191,10 +197,13 @@ class SpiDriver:
                 self._pin_dr: gpiod.LineSettings(direction=Direction.INPUT),
                 self._pin_hs: gpiod.LineSettings(direction=Direction.OUTPUT,
                                                  output_value=Value.INACTIVE),
+                self._pin_cs: gpiod.LineSettings(direction=Direction.OUTPUT,
+                                                 output_value=Value.INACTIVE,
+                                                 active_low=True),  # idle HIGH, assert=LOW
             },
         )
-        log.info("GPIO ready: DATA_READY=GPIO%d HANDSHAKE=GPIO%d",
-                 self._pin_dr, self._pin_hs)
+        log.info("GPIO ready: DATA_READY=GPIO%d HANDSHAKE=GPIO%d CS=GPIO%d",
+                 self._pin_dr, self._pin_hs, self._pin_cs)
 
         self._running = True
         self._thread = threading.Thread(target=self._driver_loop,
@@ -297,13 +306,16 @@ class SpiDriver:
                 except queue.Empty:
                     tx_frame = self._noop_frame
 
-                # Full-duplex transfer.
+                # Full-duplex transfer with manual CS (Pi5 RP1 workaround).
                 try:
+                    self._gpio_req.set_value(self._pin_cs, Value.ACTIVE)   # CS LOW
                     rx_raw = self._spi.xfer2(list(tx_frame), self._spi_speed_hz)
                 except Exception as exc:
                     log.warning("SPI xfer error: %s", exc)
                     time.sleep(0.01)
                     continue
+                finally:
+                    self._gpio_req.set_value(self._pin_cs, Value.INACTIVE) # CS HIGH
 
                 # Parse received frame.
                 rx_bytes = bytes(rx_raw)

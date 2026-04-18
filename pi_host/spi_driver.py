@@ -141,7 +141,7 @@ class SpiDriver:
         self,
         spi_bus:      int = 0,
         spi_device:   int = 0,
-        spi_speed_hz: int = 10_000_000,
+        spi_speed_hz: int = 2_000_000,
         gpio_chip:    str = "/dev/gpiochip4",  # Pi5 main GPIO chip
         pin_data_ready: int = 25,  # BCM GPIO number for DATA_READY input
         pin_handshake:  int = 24,  # BCM GPIO number for HANDSHAKE output
@@ -177,7 +177,7 @@ class SpiDriver:
         self._spi = spidev.SpiDev()
         self._spi.open(self._spi_bus, self._spi_device)
         self._spi.max_speed_hz = self._spi_speed_hz
-        self._spi.mode         = 3    # CPOL=1, CPHA=1 – matches ESP32-C5 slave
+        self._spi.mode         = 0    # CPOL=0, CPHA=0
         self._spi.bits_per_word = 8
         self._spi.no_cs        = False
         log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=3",

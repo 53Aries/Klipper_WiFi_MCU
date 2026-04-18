@@ -96,10 +96,9 @@ esp_err_t kwm_spi_init(void) {
     };
 
     /* SPI slave interface config.
-     * Mode 3 (CPOL=1, CPHA=1): clock idles high, sample on falling edge.
-     * Matches the reference project and works well with spidev on Pi5. */
+     * Mode 0 (CPOL=0, CPHA=0): clock idles low, sample on rising edge. */
     spi_slave_interface_config_t slvcfg = {
-        .mode          = 3,
+        .mode          = 0,
         .spics_io_num  = KWM_PIN_CS,
         .queue_size    = 4,
         .flags         = 0,

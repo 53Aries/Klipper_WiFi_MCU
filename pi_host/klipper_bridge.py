@@ -199,8 +199,8 @@ def main() -> None:
                         help="MCU IDs to bridge (default: all 8, i.e. 0-7)")
     parser.add_argument("--spi-bus",    type=int, default=0)
     parser.add_argument("--spi-dev",    type=int, default=0)
-    parser.add_argument("--spi-speed",  type=int, default=10_000_000,
-                        help="SPI clock Hz (default 10 MHz)")
+    parser.add_argument("--spi-speed",  type=int, default=2_000_000,
+                        help="SPI clock Hz (default 2 MHz)")
     parser.add_argument("--gpio-chip",  default="/dev/gpiochip4",
                         help="GPIO chip device (Pi5 default: gpiochip4)")
     parser.add_argument("--pin-dr",     type=int, default=25,

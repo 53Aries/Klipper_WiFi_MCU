@@ -37,7 +37,9 @@ typedef struct {
 } mcu_conn_t;
 
 static mcu_conn_t  s_conns[KWM_MAX_MCU];
-static tcp_server_rx_cb_t s_rx_cb;
+static tcp_server_rx_cb_t         s_rx_cb;
+static tcp_server_connect_cb_t    s_connect_cb;
+static tcp_server_disconnect_cb_t s_disconnect_cb;
 static _Atomic int s_mcu_count = 0;
 
 /* ── Frame reassembly state ──────────────────────────────────────────────── */
@@ -293,6 +295,10 @@ static void mcu_conn_task(void *pvParam) {
 
     ESP_LOGI(TAG, "MCU %u identified and registered on fd=%d", mcu_id, fd);
 
+    if (s_connect_cb)
+        s_connect_cb(mcu_id, ctx.payload,
+                     (uint8_t)(ctx.payload_len < 255 ? ctx.payload_len : 255));
+
     /* TCP_NODELAY: disable Nagle — Klipper bytes must not be buffered.
      * Without this, lwIP waits up to 40 ms for more data before sending. */
     int flag = 1;
@@ -328,6 +334,9 @@ static void mcu_conn_task(void *pvParam) {
             break;
         }
     }
+
+    if (s_disconnect_cb)
+        s_disconnect_cb(mcu_id);
 
     /* Deregister. */
     xSemaphoreTake(conn->tx_mutex, portMAX_DELAY);
@@ -416,8 +425,12 @@ static void tcp_listener_task(void *pvParam) {
 
 /* ── Init ────────────────────────────────────────────────────────────────── */
 
-esp_err_t tcp_server_init(tcp_server_rx_cb_t rx_cb) {
-    s_rx_cb = rx_cb;
+esp_err_t tcp_server_init(tcp_server_rx_cb_t rx_cb,
+                           tcp_server_connect_cb_t connect_cb,
+                           tcp_server_disconnect_cb_t disconnect_cb) {
+    s_rx_cb         = rx_cb;
+    s_connect_cb    = connect_cb;
+    s_disconnect_cb = disconnect_cb;
 
     for (int i = 0; i < KWM_MAX_MCU; i++) {
         s_conns[i].fd       = -1;

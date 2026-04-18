@@ -35,13 +35,25 @@ extern "C" {
 typedef void (*tcp_server_rx_cb_t)(uint8_t mcu_id,
                                    const uint8_t *data, uint16_t len);
 
+/** Callback fired when a MCU TCP connection is identified. mac/mac_len is the
+ *  CONNECT frame payload (6-byte MAC), valid only for the call duration. */
+typedef void (*tcp_server_connect_cb_t)(uint8_t mcu_id,
+                                        const uint8_t *mac, uint8_t mac_len);
+
+/** Callback fired when a MCU TCP connection closes. */
+typedef void (*tcp_server_disconnect_cb_t)(uint8_t mcu_id);
+
 /**
  * Start the TCP listener task.
  *
- * @param rx_cb  Called whenever a DATA frame arrives from any MCU.
+ * @param rx_cb          Called whenever a DATA frame arrives from any MCU.
+ * @param connect_cb     Called when a MCU identifies itself (may be NULL).
+ * @param disconnect_cb  Called when a MCU connection closes (may be NULL).
  * @return ESP_OK or error.
  */
-esp_err_t tcp_server_init(tcp_server_rx_cb_t rx_cb);
+esp_err_t tcp_server_init(tcp_server_rx_cb_t rx_cb,
+                           tcp_server_connect_cb_t connect_cb,
+                           tcp_server_disconnect_cb_t disconnect_cb);
 
 /**
  * Send raw serial data to a specific MCU.

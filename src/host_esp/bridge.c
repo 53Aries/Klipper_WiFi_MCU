@@ -30,6 +30,7 @@ static const char *TAG = "bridge";
 /* ── Buffered TCP→SPI queue ──────────────────────────────────────────────── */
 
 typedef struct {
+    uint8_t  cmd;
     uint8_t  mcu_id;
     uint16_t len;
     uint8_t  data[KWM_SPI_PAYLOAD_MAX];
@@ -40,32 +41,33 @@ static QueueHandle_t s_spi_pending_queue;
 
 /* ── TCP → SPI callback (called from TCP receive task) ───────────────────── */
 
+static void enqueue_spi(uint8_t cmd, uint8_t mcu_id,
+                         const uint8_t *data, uint16_t len) {
+    pending_spi_t pkt = { .cmd = cmd, .mcu_id = mcu_id, .len = len };
+    if (len) memcpy(pkt.data, data, len);
+    if (xQueueSend(s_spi_pending_queue, &pkt, pdMS_TO_TICKS(50)) != pdTRUE)
+        ESP_LOGW(TAG, "SPI queue full, dropping cmd=0x%02x for MCU %u", cmd, mcu_id);
+}
+
+static void on_mcu_connect(uint8_t mcu_id, const uint8_t *mac, uint8_t mac_len) {
+    enqueue_spi(KWM_CMD_CONNECT, mcu_id, mac, mac_len);
+}
+
+static void on_mcu_disconnect(uint8_t mcu_id) {
+    enqueue_spi(KWM_CMD_DISCONNECT, mcu_id, NULL, 0);
+}
+
 static void on_tcp_rx(uint8_t mcu_id, const uint8_t *data, uint16_t len) {
     if (len > KWM_SPI_PAYLOAD_MAX) {
-        /* Data too large for one SPI frame: chunk it. */
         uint16_t offset = 0;
         while (offset < len) {
             uint16_t chunk = len - offset;
             if (chunk > KWM_SPI_PAYLOAD_MAX) chunk = KWM_SPI_PAYLOAD_MAX;
-
-            pending_spi_t pkt;
-            pkt.mcu_id = mcu_id;
-            pkt.len    = chunk;
-            memcpy(pkt.data, data + offset, chunk);
-
-            if (xQueueSend(s_spi_pending_queue, &pkt, pdMS_TO_TICKS(50)) != pdTRUE)
-                ESP_LOGW(TAG, "SPI pending queue full, dropping %u bytes for MCU %u",
-                         chunk, mcu_id);
+            enqueue_spi(KWM_CMD_DATA, mcu_id, data + offset, chunk);
             offset += chunk;
         }
     } else {
-        pending_spi_t pkt;
-        pkt.mcu_id = mcu_id;
-        pkt.len    = len;
-        memcpy(pkt.data, data, len);
-
-        if (xQueueSend(s_spi_pending_queue, &pkt, pdMS_TO_TICKS(50)) != pdTRUE)
-            ESP_LOGW(TAG, "SPI pending queue full, dropping frame for MCU %u", mcu_id);
+        enqueue_spi(KWM_CMD_DATA, mcu_id, data, len);
     }
 }
 
@@ -115,7 +117,7 @@ static void tcp_to_spi_task(void *pvParam) {
             continue;
 
         kwm_spi_frame_build(s_tx_frame,
-                            KWM_CMD_DATA,
+                            (kwm_cmd_t)pkt.cmd,
                             pkt.mcu_id,
                             kwm_spi_tx_ready() ? KWM_FLAG_NONE : KWM_FLAG_MORE_DATA,
                             s_tx_seq++,
@@ -134,8 +136,8 @@ esp_err_t bridge_init(void) {
     s_spi_pending_queue = xQueueCreate(SPI_PENDING_DEPTH, sizeof(pending_spi_t));
     if (!s_spi_pending_queue) return ESP_ERR_NO_MEM;
 
-    /* Register our TCP receive callback. */
-    esp_err_t ret = tcp_server_init(on_tcp_rx);
+    /* Register TCP callbacks. */
+    esp_err_t ret = tcp_server_init(on_tcp_rx, on_mcu_connect, on_mcu_disconnect);
     if (ret != ESP_OK) return ret;
 
     if (xTaskCreate(spi_to_tcp_task, "spi_to_tcp", 4096, NULL, 9, NULL) != pdPASS)

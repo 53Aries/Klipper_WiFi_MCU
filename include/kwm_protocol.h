@@ -107,23 +107,23 @@ typedef enum {
  * Host board pinout (ESP32-C5 compact / DevKitM-1 style):
  *
  *   GPIO6  = FSPICLK  → Pi SPI0 SCLK  (pin 23)
- *   GPIO0             → Pi SPI0 MOSI  (pin 19)   [MOSI into ESP = data from Pi]
- *   GPIO8             → Pi SPI0 MISO  (pin 21)   [MISO out of ESP = data to Pi]
+ *   GPIO23            → Pi SPI0 MOSI  (pin 19)   [MOSI into ESP = data from Pi]
+ *   GPIO24            → Pi SPI0 MISO  (pin 21)   [MISO out of ESP = data to Pi]
  *   GPIO10 = FSPICS0  → Pi SPI0 CE0   (pin 24)   [active-low CS from Pi]
  *
- *   NOTE: GPIO0/GPIO8 use GPIO matrix routing (not IO_MUX dedicated pads)
- *   because ESP32-C5 SPI2 slave mode has an IO_MUX direction bug on the
- *   dedicated FSPID/FSPIQ pads (GPIO7/GPIO2) — they default to master
- *   direction, leaving MISO undriven and MOSI fighting the slave output.
- *   GPIO25            → Pi GPIO8      (BCM)       DATA_READY: ESP→Pi interrupt
- *   GPIO26            → Pi GPIO7      (BCM)       HANDSHAKE:  Pi→ESP (optional)
+ *   GPIO23/GPIO24 are pure GPIO pins with no FSPI IO_MUX assignment,
+ *   no JTAG function (GPIO2-5 are JTAG), no XTAL_32K (GPIO0/GPIO1),
+ *   and no PAD_COMP analog function (GPIO8/GPIO9). GPIO matrix routing
+ *   is forced, avoiding the ESP32-C5 SPI2 slave IO_MUX direction bug.
+ *   GPIO25            → Pi BCM GPIO25 (pin 22)   DATA_READY: ESP→Pi interrupt
+ *   GPIO26            → Pi BCM GPIO24 (pin 18)   HANDSHAKE:  Pi→ESP (optional)
  *
  * Using the hardware FSPI pads avoids GPIO-matrix routing and allows the
  * maximum safe SPI clock speed on this board.
  * ─────────────────────────────────────────────────────────────────────────── */
 #define KWM_SPI_HOST        SPI2_HOST
-#define KWM_PIN_MOSI        3    /* GPIO3  = GPIO matrix (GPIO0 has XTAL_32K cap)    */
-#define KWM_PIN_MISO        1    /* GPIO1  = D1 header pin, GPIO matrix, no FSPI bug */
+#define KWM_PIN_MOSI        23   /* GPIO23 = pure GPIO, no JTAG/XTAL/FSPI conflicts  */
+#define KWM_PIN_MISO        24   /* GPIO24 = pure GPIO, no PAD_COMP/FSPI conflicts   */
 #define KWM_PIN_SCLK        6    /* GPIO6  = FSPICLK                         */
 #define KWM_PIN_CS          10   /* GPIO10 = FSPICS0                         */
 #define KWM_PIN_DATA_READY  25   /* GPIO25, output → Pi BCM GPIO25 (pin 22)  */

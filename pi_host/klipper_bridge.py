@@ -35,7 +35,7 @@ import threading
 import time
 import logging
 
-from spi_driver import SpiDriver, CMD_DATA, PAYLOAD_MAX
+from spi_driver import SpiDriver, CMD_DATA, CMD_CONNECT, CMD_DISCONNECT, PAYLOAD_MAX
 
 logging.basicConfig(
     level=logging.INFO,
@@ -170,6 +170,13 @@ class KlipperBridge:
         while self._running:
             frame = self._drv.recv(timeout=0.1)
             if frame is None:
+                continue
+            if frame["cmd"] == CMD_CONNECT:
+                log.info("MCU %d connected (MAC: %s)", frame["mcu_id"],
+                         frame["payload"].hex(":") if frame["payload"] else "?")
+                continue
+            if frame["cmd"] == CMD_DISCONNECT:
+                log.info("MCU %d disconnected", frame["mcu_id"])
                 continue
             if frame["cmd"] != CMD_DATA:
                 continue

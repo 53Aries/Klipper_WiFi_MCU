@@ -12,8 +12,8 @@
  *   MISO  GPIO2  (FSPIQ)   → Pi SPI0 MISO pin 21
  *   SCLK  GPIO6  (FSPICLK) ← Pi SPI0 SCLK pin 23
  *   CS    GPIO10 (FSPICS0) ← Pi SPI0 CE0  pin 24
- *   DATA_READY GPIO25 (output) → Pi GPIO8 BCM  (interrupt: ESP has data)
- *   HANDSHAKE  GPIO26 (input)  ← Pi GPIO7 BCM  (Pi ready signal)
+ *   DATA_READY GPIO25 (output) → Pi BCM GPIO25 / pin 22
+ *   HANDSHAKE  GPIO26 (input)  ← Pi BCM GPIO24 / pin 18
  *
  * NOTE: Named kwm_spi_* to avoid colliding with the ESP-IDF HAL component
  *       (components/hal/spi_slave_hal.c which also defines spi_slave_hal_init).

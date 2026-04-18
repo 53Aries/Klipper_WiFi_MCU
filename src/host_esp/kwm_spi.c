@@ -187,19 +187,19 @@ static void spi_slave_task(void *pvParam) {
         bool     have_tx = (xQueuePeek(s_tx_queue, &tx_ptr, 0) == pdTRUE);
 
         if (have_tx) {
-            /* Dequeue the pointer and copy payload into DMA buffer. */
             xQueueReceive(s_tx_queue, &tx_ptr, 0);
             memcpy(s_tx_dma_buf, tx_ptr, KWM_SPI_FRAME_LEN);
             heap_caps_free(tx_ptr);
-            update_data_ready();
+            /* Keep DATA_READY asserted: real frame is loaded, Pi must clock it out.
+             * Do NOT call update_data_ready() here — that would de-assert because
+             * the queue is now empty, causing the Pi to miss this frame. */
+            gpio_set_level(KWM_PIN_DATA_READY, 1);
         } else {
-            /* Send NOOP so Pi gets a clean frame (no garbage MISO). */
             memcpy(s_tx_dma_buf, s_noop_frame, KWM_SPI_FRAME_LEN);
-            /* Update NOOP seq number so Pi can detect repeated NOOPs. */
             s_tx_dma_buf[4] = s_tx_seq++;
-            /* Recompute CRC after patching seq. */
             uint16_t crc = kwm_crc16(s_tx_dma_buf, KWM_SPI_FRAME_LEN - 2);
             kwm_put_be16(s_tx_dma_buf + KWM_SPI_FRAME_LEN - 2, crc);
+            gpio_set_level(KWM_PIN_DATA_READY, 0);
         }
 
         memset(s_rx_dma_buf, 0, KWM_SPI_FRAME_LEN);
@@ -217,6 +217,9 @@ static void spi_slave_task(void *pvParam) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
+
+        /* Transaction complete — now reflect true queue state on DATA_READY. */
+        update_data_ready();
 
         /* Validate and enqueue received frame (ignore NOOPs and bad CRCs). */
         if (kwm_spi_frame_valid(s_rx_dma_buf)) {

@@ -62,6 +62,7 @@ class PtyChannel:
         self.master_fd = master_fd
         self.slave_fd  = slave_fd
         self.slave_name = os.ttyname(slave_fd)
+        os.chmod(self.slave_name, 0o666)  # allow non-root (klipper user) to open
         log.info("MCU %d PTY: %s", mcu_id, self.slave_name)
 
     def create_symlink(self) -> str:

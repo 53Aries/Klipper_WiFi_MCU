@@ -123,7 +123,7 @@ typedef enum {
  * ─────────────────────────────────────────────────────────────────────────── */
 #define KWM_SPI_HOST        SPI2_HOST
 #define KWM_PIN_MOSI        3    /* GPIO3  = GPIO matrix (GPIO0 has XTAL_32K cap)    */
-#define KWM_PIN_MISO        8    /* GPIO8  = GPIO matrix (avoids FSPI IO_MUX bug)    */
+#define KWM_PIN_MISO        1    /* GPIO1  = D1 header pin, GPIO matrix, no FSPI bug */
 #define KWM_PIN_SCLK        6    /* GPIO6  = FSPICLK                         */
 #define KWM_PIN_CS          10   /* GPIO10 = FSPICS0                         */
 #define KWM_PIN_DATA_READY  25   /* GPIO25, output → Pi BCM GPIO25 (pin 22)  */

@@ -224,8 +224,9 @@ static void spi_slave_task(void *pvParam) {
             continue;
         }
 
-        ESP_LOGI(TAG, "SPI txn done: rx[0:4]=%02x%02x%02x%02x",
-                 s_rx_dma_buf[0], s_rx_dma_buf[1], s_rx_dma_buf[2], s_rx_dma_buf[3]);
+        ESP_LOGI(TAG, "SPI txn done: rx[0:7]=%02x %02x %02x %02x %02x %02x %02x %02x",
+                 s_rx_dma_buf[0], s_rx_dma_buf[1], s_rx_dma_buf[2], s_rx_dma_buf[3],
+                 s_rx_dma_buf[4], s_rx_dma_buf[5], s_rx_dma_buf[6], s_rx_dma_buf[7]);
 
         /* Transaction complete — now reflect true queue state on DATA_READY. */
         update_data_ready();

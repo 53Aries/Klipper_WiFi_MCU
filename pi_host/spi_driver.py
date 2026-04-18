@@ -141,7 +141,7 @@ class SpiDriver:
         self,
         spi_bus:      int = 0,
         spi_device:   int = 0,
-        spi_speed_hz: int = 500_000,
+        spi_speed_hz: int = 100_000,
         gpio_chip:    str = "/dev/gpiochip4",  # Pi5 main GPIO chip
         pin_data_ready: int = 25,  # BCM GPIO number for DATA_READY input
         pin_handshake:  int = 24,  # BCM GPIO number for HANDSHAKE output
@@ -180,8 +180,8 @@ class SpiDriver:
         self._spi.mode         = 0    # CPOL=0, CPHA=0
         self._spi.bits_per_word = 8
         self._spi.no_cs        = False
-        log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=3",
-                 self._spi_bus, self._spi_device, self._spi_speed_hz)
+        log.info("SPI opened: bus=%d dev=%d speed=%d Hz mode=%d",
+                 self._spi_bus, self._spi_device, self._spi_speed_hz, self._spi.mode)
 
         # GPIO (gpiod v2 API)
         self._gpio_req = gpiod.request_lines(

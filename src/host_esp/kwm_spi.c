@@ -31,7 +31,6 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_cache.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "kwm_spi";
@@ -215,11 +214,10 @@ static void spi_slave_task(void *pvParam) {
             .rx_buffer = s_rx_dma_buf,
         };
 
-        /* Block until Pi initiates a transaction (CS falling edge). */
-        esp_cache_msync((void *)s_tx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+        /* Block until Pi initiates a transaction (CS falling edge).
+         * IDF 5.x spi_slave_transmit handles cache coherency internally
+         * for static DRAM buffers — no manual esp_cache_msync needed. */
         esp_err_t ret = spi_slave_transmit(KWM_SPI_HOST, &t, portMAX_DELAY);
-        if (ret == ESP_OK)
-            esp_cache_msync((void *)s_rx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "spi_slave_transmit error: %s", esp_err_to_name(ret));
             vTaskDelay(pdMS_TO_TICKS(10));

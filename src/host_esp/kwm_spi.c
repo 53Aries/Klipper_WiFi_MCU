@@ -31,18 +31,17 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_heap_caps.h"
+#include "esp_cache.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "kwm_spi";
 
 /* ── Internal state ──────────────────────────────────────────────────────── */
 
-/* DMA-capable buffers – heap-allocated to ensure cache coherency on ESP32-C5.
- * Static .bss buffers are in cached DRAM; without explicit writeback the DMA
- * reads stale (zero-initialised) data and Pi receives all 0x00 on MISO. */
-static uint8_t *s_tx_dma_buf;
-static uint8_t *s_rx_dma_buf;
+/* DMA buffers in DRAM. esp_cache_msync() flushes/invalidates around each
+ * transaction so DMA always sees the data the CPU wrote (and vice versa). */
+WORD_ALIGNED_ATTR static uint8_t s_tx_dma_buf[KWM_SPI_FRAME_LEN];
+WORD_ALIGNED_ATTR static uint8_t s_rx_dma_buf[KWM_SPI_FRAME_LEN];
 
 /* Ring queues of heap-allocated frame copies. */
 static QueueHandle_t s_tx_queue;   /* frames waiting to go to Pi  */
@@ -62,18 +61,6 @@ static void update_data_ready(void);
 
 esp_err_t kwm_spi_init(void) {
     esp_err_t ret;
-
-    /* Allocate DMA buffers from heap so ESP-IDF handles cache coherency.
-     * Static .bss buffers in cached DRAM require explicit writeback;
-     * heap_caps_malloc with MALLOC_CAP_DMA ensures the right memory region. */
-    s_tx_dma_buf = heap_caps_malloc(KWM_SPI_FRAME_LEN, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    s_rx_dma_buf = heap_caps_malloc(KWM_SPI_FRAME_LEN, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    if (!s_tx_dma_buf || !s_rx_dma_buf) {
-        ESP_LOGE(TAG, "Failed to allocate DMA buffers");
-        return ESP_ERR_NO_MEM;
-    }
-    memset(s_tx_dma_buf, 0, KWM_SPI_FRAME_LEN);
-    memset(s_rx_dma_buf, 0, KWM_SPI_FRAME_LEN);
 
     /* Build the standing NOOP frame once. */
     kwm_spi_frame_build(s_noop_frame, KWM_CMD_NOOP, 0, KWM_FLAG_NONE, 0, NULL, 0);
@@ -129,6 +116,7 @@ esp_err_t kwm_spi_init(void) {
         ESP_LOGE(TAG, "spi_slave_initialize failed: %s", esp_err_to_name(ret));
         return ret;
     }
+    gpio_set_pull_mode(KWM_PIN_MOSI, GPIO_FLOATING);
 
     ESP_LOGI(TAG, "SPI slave initialised (MOSI=%d MISO=%d SCLK=%d CS=%d DR=%d HS=%d)",
              KWM_PIN_MOSI, KWM_PIN_MISO, KWM_PIN_SCLK, KWM_PIN_CS,
@@ -228,7 +216,10 @@ static void spi_slave_task(void *pvParam) {
         };
 
         /* Block until Pi initiates a transaction (CS falling edge). */
+        esp_cache_msync((void *)s_tx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
         esp_err_t ret = spi_slave_transmit(KWM_SPI_HOST, &t, portMAX_DELAY);
+        if (ret == ESP_OK)
+            esp_cache_msync((void *)s_rx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "spi_slave_transmit error: %s", esp_err_to_name(ret));
             vTaskDelay(pdMS_TO_TICKS(10));

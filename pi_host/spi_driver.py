@@ -141,7 +141,7 @@ class SpiDriver:
         self,
         spi_bus:      int = 0,
         spi_device:   int = 0,
-        spi_speed_hz: int = 2_000_000,
+        spi_speed_hz: int = 500_000,
         gpio_chip:    str = "/dev/gpiochip4",  # Pi5 main GPIO chip
         pin_data_ready: int = 25,  # BCM GPIO number for DATA_READY input
         pin_handshake:  int = 24,  # BCM GPIO number for HANDSHAKE output

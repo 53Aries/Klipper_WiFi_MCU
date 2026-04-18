@@ -117,8 +117,8 @@ typedef enum {
  * maximum safe SPI clock speed on this board.
  * ─────────────────────────────────────────────────────────────────────────── */
 #define KWM_SPI_HOST        SPI2_HOST
-#define KWM_PIN_MOSI        7    /* GPIO7  = FSPID                           */
-#define KWM_PIN_MISO        2    /* GPIO2  = FSPIQ                           */
+#define KWM_PIN_MOSI        2    /* GPIO2  = FSPIQ (swapped: ESP-IDF slave reverses D/Q) */
+#define KWM_PIN_MISO        7    /* GPIO7  = FSPID (swapped: ESP-IDF slave reverses D/Q) */
 #define KWM_PIN_SCLK        6    /* GPIO6  = FSPICLK                         */
 #define KWM_PIN_CS          10   /* GPIO10 = FSPICS0                         */
 #define KWM_PIN_DATA_READY  25   /* GPIO25, output → Pi BCM GPIO25 (pin 22)  */

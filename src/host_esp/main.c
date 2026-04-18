@@ -17,6 +17,7 @@
 #include "esp_chip_info.h"
 #include "esp_idf_version.h"
 
+#include "driver/gpio.h"
 #include "kwm_spi.h"
 #include "wifi_ap.h"
 #include "bridge.h"
@@ -31,10 +32,11 @@ static void status_task(void *pvParam) {
     (void)pvParam;
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(10000));  /* log every 10 s */
-        ESP_LOGI(TAG, "Heap free: %lu bytes | SPI rx pending: %d | WiFi STAs: %d",
+        ESP_LOGI(TAG, "Heap free: %lu bytes | SPI rx pending: %d | WiFi STAs: %d | CS(GPIO%d)=%d",
                  (unsigned long)esp_get_free_heap_size(),
                  kwm_spi_rx_pending(),
-                 wifi_ap_station_count());
+                 wifi_ap_station_count(),
+                 KWM_PIN_CS, gpio_get_level(KWM_PIN_CS));
     }
 }
 
@@ -64,6 +66,16 @@ void app_main(void) {
         nvs_ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvs_ret);
+
+    /* Temp: verify CS (GPIO10) is reachable before handing it to SPI slave. */
+    gpio_config_t cs_test = {
+        .pin_bit_mask = (1ULL << KWM_PIN_CS),
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
+    };
+    gpio_config(&cs_test);
+    ESP_LOGI(TAG, "CS (GPIO%d) level before SPI init: %d (expect 1=idle-HIGH)",
+             KWM_PIN_CS, gpio_get_level(KWM_PIN_CS));
 
     /* SPI slave. */
     ESP_LOGI(TAG, "Initialising SPI slave...");

@@ -122,7 +122,7 @@ typedef enum {
  * maximum safe SPI clock speed on this board.
  * ─────────────────────────────────────────────────────────────────────────── */
 #define KWM_SPI_HOST        SPI2_HOST
-#define KWM_PIN_MOSI        0    /* GPIO0  = GPIO matrix (avoids FSPI IO_MUX bug)    */
+#define KWM_PIN_MOSI        3    /* GPIO3  = GPIO matrix (GPIO0 has XTAL_32K cap)    */
 #define KWM_PIN_MISO        8    /* GPIO8  = GPIO matrix (avoids FSPI IO_MUX bug)    */
 #define KWM_PIN_SCLK        6    /* GPIO6  = FSPICLK                         */
 #define KWM_PIN_CS          10   /* GPIO10 = FSPICS0                         */

@@ -8,12 +8,15 @@
  * can also initiate a transaction at any time to push data to us.
  *
  * Pin assignments – compact ESP32-C5 host board (hardware FSPI pads):
- *   MOSI  GPIO7  (FSPID)   ← Pi SPI0 MOSI pin 19
- *   MISO  GPIO2  (FSPIQ)   → Pi SPI0 MISO pin 21
+ *   MOSI  GPIO3             ← Pi SPI0 MOSI pin 19
+ *   MISO  GPIO8             → Pi SPI0 MISO pin 21
  *   SCLK  GPIO6  (FSPICLK) ← Pi SPI0 SCLK pin 23
  *   CS    GPIO10 (FSPICS0) ← Pi SPI0 CE0  pin 24
  *   DATA_READY GPIO25 (output) → Pi BCM GPIO25 / pin 22
  *   HANDSHAKE  GPIO26 (input)  ← Pi BCM GPIO24 / pin 18
+ *
+ *   GPIO3/GPIO8 use GPIO matrix routing (not dedicated FSPI IO_MUX pads)
+ *   because ESP32-C5 SPI2 slave mode has a direction bug on dedicated pads.
  *
  * NOTE: Named kwm_spi_* to avoid colliding with the ESP-IDF HAL component
  *       (components/hal/spi_slave_hal.c which also defines spi_slave_hal_init).
@@ -28,15 +31,18 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "kwm_spi";
 
 /* ── Internal state ──────────────────────────────────────────────────────── */
 
-/* DMA-capable buffers – must be 4-byte aligned, in DRAM (not IRAM/flash). */
-WORD_ALIGNED_ATTR static uint8_t s_tx_dma_buf[KWM_SPI_FRAME_LEN];
-WORD_ALIGNED_ATTR static uint8_t s_rx_dma_buf[KWM_SPI_FRAME_LEN];
+/* DMA-capable buffers – heap-allocated to ensure cache coherency on ESP32-C5.
+ * Static .bss buffers are in cached DRAM; without explicit writeback the DMA
+ * reads stale (zero-initialised) data and Pi receives all 0x00 on MISO. */
+static uint8_t *s_tx_dma_buf;
+static uint8_t *s_rx_dma_buf;
 
 /* Ring queues of heap-allocated frame copies. */
 static QueueHandle_t s_tx_queue;   /* frames waiting to go to Pi  */
@@ -56,6 +62,18 @@ static void update_data_ready(void);
 
 esp_err_t kwm_spi_init(void) {
     esp_err_t ret;
+
+    /* Allocate DMA buffers from heap so ESP-IDF handles cache coherency.
+     * Static .bss buffers in cached DRAM require explicit writeback;
+     * heap_caps_malloc with MALLOC_CAP_DMA ensures the right memory region. */
+    s_tx_dma_buf = heap_caps_malloc(KWM_SPI_FRAME_LEN, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    s_rx_dma_buf = heap_caps_malloc(KWM_SPI_FRAME_LEN, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    if (!s_tx_dma_buf || !s_rx_dma_buf) {
+        ESP_LOGE(TAG, "Failed to allocate DMA buffers");
+        return ESP_ERR_NO_MEM;
+    }
+    memset(s_tx_dma_buf, 0, KWM_SPI_FRAME_LEN);
+    memset(s_rx_dma_buf, 0, KWM_SPI_FRAME_LEN);
 
     /* Build the standing NOOP frame once. */
     kwm_spi_frame_build(s_noop_frame, KWM_CMD_NOOP, 0, KWM_FLAG_NONE, 0, NULL, 0);

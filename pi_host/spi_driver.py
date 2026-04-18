@@ -307,6 +307,7 @@ class SpiDriver:
 
                 # Parse received frame.
                 rx_bytes = bytes(rx_raw)
+                log.debug("SPI xfer: dr=%s rx_hdr=%s", data_ready, rx_bytes[:4].hex())
                 frame = parse_frame(rx_bytes)
                 if frame and frame["cmd"] != CMD_NOOP:
                     log.debug("RX cmd=0x%02x mcu=%d len=%d",

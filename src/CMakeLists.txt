@@ -29,8 +29,6 @@ if("${BUILD_DIR}" MATCHES "/host_esp")
         INCLUDE_DIRS
             "host_esp"
             "${KWM_INCLUDE_DIR}"
-        REQUIRES
-            esp_driver_rmt
     )
 
 elseif("${BUILD_DIR}" MATCHES "/mcu_esp")

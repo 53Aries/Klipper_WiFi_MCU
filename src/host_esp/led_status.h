@@ -1,13 +1,13 @@
 #pragma once
 
 /**
- * LED status indicator for host ESP32-C5 (WS2812 on GPIO27).
+ * LED status indicator for host XIAO ESP32-C5 (active-low GPIO27).
  *
- * States:
- *   BOOTING         — amber:  system initialising
- *   WIFI_ERROR      — red:    WiFi AP failed to start
- *   WIFI_UP         — blue:   AP running, no MCUs connected
- *   MCU_CONNECTED   — green:  ≥1 MCU has an active TCP connection
+ * States and blink patterns:
+ *   BOOTING         — fast blink  4 Hz  (125 ms on / 125 ms off)
+ *   WIFI_ERROR      — SOS: 3×short, 3×long, 3×short, 1 s pause
+ *   WIFI_UP         — slow blink  1 Hz  (500 ms on / 500 ms off)
+ *   MCU_CONNECTED   — solid on
  */
 
 typedef enum {

@@ -6,8 +6,8 @@
  * Override baud in sdkconfig.defaults (CONFIG_KWM_UART_BAUD).
  *
  * Pins (override in sdkconfig):
- *   TX  GPIO16 → STM32 RX
- *   RX  GPIO17 ← STM32 TX
+ *   TX  GPIO11 (D6) → STM32 RX
+ *   RX  GPIO12 (D7) ← STM32 TX
  *
  * NOTE: Named kwm_uart_* (not uart_hal_*) to avoid colliding with the
  *       ESP-IDF internal HAL component (components/hal/uart_hal.c).
@@ -27,10 +27,10 @@ extern "C" {
 #  define KWM_UART_PORT  UART_NUM_1
 #endif
 #ifndef KWM_UART_TX_PIN
-#  define KWM_UART_TX_PIN  16
+#  define KWM_UART_TX_PIN  11
 #endif
 #ifndef KWM_UART_RX_PIN
-#  define KWM_UART_RX_PIN  17
+#  define KWM_UART_RX_PIN  12
 #endif
 #ifndef KWM_UART_BAUD
 #  define KWM_UART_BAUD  500000

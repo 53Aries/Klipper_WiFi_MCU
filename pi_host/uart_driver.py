@@ -2,7 +2,7 @@
 uart_driver.py - Pi5 UART driver for KWM host transport
 
 Communicates with the host XIAO ESP32-C5 over a 1 Mbaud UART on
-/dev/ttyAMA0 (Bluetooth must be disabled — see setup below).
+/dev/serial0 (Bluetooth must be disabled — see setup below).
 
 Wiring (3 wires total):
   Pi BCM14 (pin 8,  TXD) → XIAO GPIO12 (D7/RX)
@@ -106,7 +106,7 @@ def parse_frame(raw: bytes) -> Optional[dict]:
 class UartDriver:
     """Full-duplex UART driver for Pi5 ↔ host ESP32-C5."""
 
-    def __init__(self, port: str = "/dev/ttyAMA0", baudrate: int = 1_000_000):
+    def __init__(self, port: str = "/dev/serial0", baudrate: int = 1_000_000):
         self._port     = port
         self._baudrate = baudrate
         self._ser: Optional[serial.Serial] = None

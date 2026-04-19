@@ -35,7 +35,7 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 │       │  /dev/kwm0   /dev/kwm1  …  PTY symlinks                 │
 │  klipper_bridge.py  ←──── uart_driver.py                        │
 │       │                        │                                 │
-│  BCM14/TXD (pin 8)        /dev/ttyAMA0  (1 Mbaud)               │
+│  BCM14/TXD (pin 8)        /dev/serial0  (1 Mbaud)               │
 │  BCM15/RXD (pin 10)                                              │
 └──────────────────────────────┬──────────────────────────────────┘
                                │  256-byte KWM frames @ 1 Mbaud
@@ -66,7 +66,7 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 
 1. Klipper writes serial bytes to `/dev/kwm0` (PTY slave).
 2. `klipper_bridge.py` reads from the PTY master, packs a 256-byte KWM frame.
-3. Pi5 sends the frame to the Host XIAO over UART (`/dev/ttyAMA0`, 1 Mbaud).
+3. Pi5 sends the frame to the Host XIAO over UART (`/dev/serial0`, 1 Mbaud).
 4. Host ESP routes the payload over TCP to the matching MCU ESP connection.
 5. MCU ESP writes the bytes out UART1 to the STM32.
 
@@ -75,7 +75,7 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 1. STM32 sends bytes over UART to MCU ESP.
 2. MCU ESP wraps them in a TCP frame and sends to Host ESP.
 3. Host ESP builds a 256-byte KWM frame and writes it to its UART TX.
-4. Pi5 reads the frame from `/dev/ttyAMA0`, unpacks it.
+4. Pi5 reads the frame from `/dev/serial0`, unpacks it.
 5. `klipper_bridge.py` writes the payload to the correct PTY master.
 6. Klipper reads the bytes from the PTY slave `/dev/kwm0`.
 
@@ -290,18 +290,19 @@ python3 --version   # Python 3.11.x or newer
 
 ### Step 3 — Disable Bluetooth to free the hardware UART
 
-The Pi5's primary UART (`/dev/ttyAMA0`, BCM14/15) is claimed by Bluetooth by
-default.  Disable it:
+The Pi5's primary UART (BCM14/15) is claimed by Bluetooth by default.
+Disable it and reboot:
 
 ```bash
 echo "dtoverlay=disable-bt" | sudo tee -a /boot/firmware/config.txt
 sudo reboot
 ```
 
-After reboot, verify the UART device is available:
+After reboot, verify the UART device is available (Pi5 exposes it as
+`/dev/ttyAMA10`; `/dev/serial0` is a stable symlink to it):
 
 ```bash
-ls /dev/ttyAMA0   # should exist
+ls /dev/serial0 /dev/ttyAMA10   # both should exist
 ```
 
 And confirm it is no longer held by Bluetooth:
@@ -312,7 +313,7 @@ sudo systemctl status hciuart   # should show "masked" or "not-found"
 
 ### Step 4 — Add your user to the `dialout` group
 
-`/dev/ttyAMA0` is owned by `root:dialout`.  The bridge service runs as root so
+`/dev/serial0` is owned by `root:dialout`.  The bridge service runs as root so
 this is only needed for manual testing without `sudo`:
 
 ```bash
@@ -391,7 +392,7 @@ symlinks for all 8 MCU IDs (`/dev/kwm0`–`/dev/kwm7`) at startup.
 
 ```
 --mcus ID [ID ...]     MCU IDs to create PTYs for (default: 0-7)
---port PATH            UART device (default: /dev/ttyAMA0)
+--port PATH            UART device (default: /dev/serial0)
 --baudrate N           Baud rate (default: 1000000)
 --verbose / -v         Enable debug logging
 ```
@@ -399,7 +400,7 @@ symlinks for all 8 MCU IDs (`/dev/kwm0`–`/dev/kwm7`) at startup.
 ### Expected startup output
 
 ```
-2026-04-18 12:00:01 klipper_bridge INFO UART opened: /dev/ttyAMA0 @ 1000000 baud
+2026-04-18 12:00:01 klipper_bridge INFO UART opened: /dev/serial0 @ 1000000 baud
 2026-04-18 12:00:01 klipper_bridge INFO MCU 0 PTY: /dev/pts/2
 2026-04-18 12:00:01 klipper_bridge INFO MCU 0 symlink: /dev/kwm0 -> /dev/pts/2
 ...
@@ -598,10 +599,12 @@ Covers all bytes before the 2-byte CRC field.
 ### No UART communication (Pi ↔ Host ESP)
 
 - Confirm `dtoverlay=disable-bt` is in `/boot/firmware/config.txt` and the Pi
-  has been rebooted — without this, Bluetooth holds `/dev/ttyAMA0`.
+  has been rebooted — without this, Bluetooth holds the hardware UART.
+- On Pi5, the UART appears as `/dev/ttyAMA10`; use `/dev/serial0` (stable symlink).
+  The bridge service uses `--port /dev/serial0` via the systemd override.
 - Verify TX and RX are **crossed**: Pi TXD (pin 8) → XIAO D7/RX (GPIO12) and
   Pi RXD (pin 10) ← XIAO D6/TX (GPIO11).
-- Confirm `/dev/ttyAMA0` exists: `ls /dev/ttyAMA0`.
+- Confirm `/dev/serial0` exists: `ls /dev/serial0`.
 - Run the bridge with `--verbose` and check for "UART opened" in the logs.
 
 ### MCU ESP won't connect to WiFi

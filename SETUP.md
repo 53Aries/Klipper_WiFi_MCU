@@ -331,10 +331,14 @@ cd Klipper_WiFi_MCU
 
 ### Step 6 — Install the bridge service
 
-Run this from inside the `Klipper_WiFi_MCU` directory:
+Run these two commands from inside the `Klipper_WiFi_MCU` directory:
 
 ```bash
-sudo tee /etc/systemd/system/kwm-bridge.service > /dev/null << EOF
+REPO="$HOME/Klipper_WiFi_MCU"
+```
+
+```bash
+sudo tee /etc/systemd/system/kwm-bridge.service > /dev/null << UNIT
 [Unit]
 Description=Klipper WiFi MCU UART bridge daemon
 After=network.target
@@ -342,7 +346,7 @@ Before=klipper.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 $(pwd)/pi_host/klipper_bridge.py
+ExecStart=/usr/bin/python3 ${REPO}/pi_host/klipper_bridge.py
 Restart=always
 RestartSec=3
 User=root
@@ -351,7 +355,7 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-EOF
+UNIT
 ```
 
 Enable and start:

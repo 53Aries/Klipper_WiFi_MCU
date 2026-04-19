@@ -79,8 +79,9 @@ static void uart_to_tcp_task(void *pvParam) {
         uint16_t plen   = kwm_be16((const uint8_t *)&f->payload_len);
 
         if (f->cmd == KWM_CMD_DATA && plen > 0 && plen <= KWM_SPI_PAYLOAD_MAX) {
+            ESP_LOGI(TAG, "UART→TCP mcu=%u len=%u", mcu_id, plen);
             if (!tcp_server_mcu_connected(mcu_id)) {
-                ESP_LOGD(TAG, "MCU %u not connected, dropping %u bytes", mcu_id, plen);
+                ESP_LOGW(TAG, "MCU %u not connected, dropping %u bytes", mcu_id, plen);
                 continue;
             }
             esp_err_t err = tcp_server_send(mcu_id, f->payload, plen);

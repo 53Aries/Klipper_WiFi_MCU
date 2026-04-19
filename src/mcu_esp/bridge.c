@@ -21,6 +21,7 @@ static const char *TAG = "bridge";
 /* ── UART → TCP ──────────────────────────────────────────────────────────── */
 
 static void on_uart_rx(const uint8_t *data, size_t len) {
+    ESP_LOGI(TAG, "UART→TCP len=%u", (unsigned)len);
     size_t offset = 0;
     while (offset < len) {
         uint16_t chunk = (uint16_t)(len - offset);
@@ -40,6 +41,7 @@ static void on_uart_rx(const uint8_t *data, size_t len) {
 /* ── TCP → UART ──────────────────────────────────────────────────────────── */
 
 static void on_tcp_rx(const uint8_t *data, uint16_t len) {
+    ESP_LOGI(TAG, "TCP→UART len=%u", len);
     esp_err_t ret = kwm_uart_send(data, len);
     if (ret != ESP_OK)
         ESP_LOGW(TAG, "kwm_uart_send failed: %s", esp_err_to_name(ret));

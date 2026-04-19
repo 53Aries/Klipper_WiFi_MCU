@@ -22,7 +22,7 @@ slave device (/dev/pts/X). Klipper can then be configured with these
 stable symlink paths instead of volatile /dev/pts/X numbers.
 
 Requirements:
-  sudo apt install python3-spidev python3-libgpiod
+  sudo apt install python3-serial
 """
 
 import argparse
@@ -102,7 +102,7 @@ class PtyChannel:
 
 class KlipperBridge:
     """
-    Main bridge: polls PTYs for outgoing data and SpiDriver for incoming data.
+    Main bridge: polls PTYs for outgoing data and UartDriver for incoming data.
     """
 
     def __init__(self, mcu_ids: list, drv_kwargs: dict):

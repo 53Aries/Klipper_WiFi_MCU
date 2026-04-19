@@ -9,8 +9,8 @@
  * definition in kwm_protocol.h.
  *
  * Pin assignments – Seeed XIAO ESP32-C5 (host board):
- *   UART1 TX  GPIO11 (D6) → Pi BCM15 (pin 10, RXD)
- *   UART1 RX  GPIO12 (D7) ← Pi BCM14 (pin  8, TXD)
+ *   UART1 TX  GPIO11 (D6) → Pi GPIO5/BCM5 (pin 29, RXD / UART2)
+ *   UART1 RX  GPIO12 (D7) ← Pi GPIO4/BCM4 (pin  7, TXD / UART2)
  */
 
 #pragma once

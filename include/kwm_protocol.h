@@ -1,18 +1,16 @@
 /**
  * kwm_protocol.h - Klipper WiFi MCU shared protocol definitions
  *
- * SPI frame (Pi5 <-> host ESP32-C5):
- *   Fixed 256-byte full-duplex transactions. Both sides simultaneously
- *   transmit their outgoing frame while receiving the other's frame.
- *   The host ESP asserts DATA_READY GPIO when it has data queued for the Pi.
- *   Pi polls DATA_READY or uses a GPIO interrupt to know when to initiate
- *   a transaction.
+ * UART frame (Pi5 <-> host ESP32-C5):
+ *   Fixed 256-byte frames over UART1 at KWM_HOST_UART_BAUD (default 1 Mbaud).
+ *   Pi reads exactly 256 bytes per frame; magic + CRC ensure alignment.
+ *   RX resync discards bytes until 0xAB 0xCD is found if framing is lost.
  *
  * TCP frame (host ESP <-> MCU ESP, over WiFi 6):
  *   Variable-length stream framing. Host ESP acts as TCP server; each MCU
  *   ESP connects as a client and identifies itself with KWM_CMD_CONNECT.
  *
- * Frame layout (SPI, exactly 256 bytes):
+ * Frame layout (UART, exactly 256 bytes):
  *   [0..1]   Magic: 0xAB 0xCD
  *   [2]      Command (kwm_cmd_t)
  *   [3]      MCU ID (bits 3:0) | Flags (bits 7:4)
@@ -44,7 +42,7 @@
 #define KWM_MAGIC_1         0xCD
 #define KWM_MAGIC           0xABCD
 
-/* ── SPI frame constants ─────────────────────────────────────────────────── */
+/* ── UART frame constants (KWM_SPI_* names kept for source compatibility) ── */
 #define KWM_SPI_FRAME_LEN   256
 #define KWM_SPI_HEADER_LEN  8
 #define KWM_SPI_CRC_LEN     2
@@ -104,8 +102,8 @@ typedef enum {
 
 /* ── Host UART pin defaults (Seeed XIAO ESP32-C5) ───────────────────────────
  *
- *   GPIO11 (D6/TX) → Pi BCM15 (pin 10, RXD)
- *   GPIO12 (D7/RX) ← Pi BCM14 (pin  8, TXD)
+ *   GPIO11 (D6/TX) → Pi GPIO5/BCM5 (pin 29, RXD / UART2)
+ *   GPIO12 (D7/RX) ← Pi GPIO4/BCM4 (pin  7, TXD / UART2)
  *
  * Override with -DKWM_HOST_UART_TX_PIN=N / -DKWM_HOST_UART_RX_PIN=N.
  * ─────────────────────────────────────────────────────────────────────────── */
@@ -115,7 +113,7 @@ typedef enum {
 
 /* ── Frame structs ───────────────────────────────────────────────────────── */
 
-/** Overlay on a raw 256-byte SPI buffer. */
+/** Overlay on a raw 256-byte UART frame buffer. */
 typedef struct __attribute__((packed)) {
     uint8_t  magic[2];          /* 0xAB, 0xCD                              */
     uint8_t  cmd;               /* kwm_cmd_t                               */

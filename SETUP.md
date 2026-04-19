@@ -204,7 +204,7 @@ I (xxx) main: === Klipper WiFi MCU - Host ESP32-C5 ===
 I (xxx) main: IDF 5.5.4 | cores=1
 I (xxx) main: TCP port 8842 | max MCUs 8
 I (xxx) kwm_uart: UART1 ready (TX=11 RX=12 baud=1000000)
-I (xxx) wifi_ap: WiFi 6 AP started: SSID=KlipperMesh (hidden) IP=192.168.42.1
+I (xxx) wifi_ap: WiFi 6 AP started: SSID=KlipperMesh (hidden) channel=6 IP=192.168.42.1
 I (xxx) tcp_server: TCP server listening on port 8842
 I (xxx) bridge: Bridge initialised
 I (xxx) main: Host firmware ready. Waiting for Pi UART and MCU connections.
@@ -241,8 +241,10 @@ Expected output:
 
 ```
 I (xxx) main: === Klipper WiFi MCU - MCU Bridge ESP32-C5 ===
+I (xxx) main: IDF v5.5.4
 I (xxx) main: MAC  ac:15:18:3a:b2:7f
 I (xxx) main: MCU ID = 3  (hash of MAC[3:5] mod 8)
+I (xxx) main: Pi PTY will appear as /dev/kwm3
 I (xxx) wifi_sta: Connected to AP 'KlipperMesh'
 I (xxx) tcp_client: TCP connected to host (fd=4)
 I (xxx) tcp_client: Sent CONNECT: mcu_id=3  MAC=ac:15:18:3a:b2:7f

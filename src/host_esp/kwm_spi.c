@@ -7,16 +7,16 @@
  * DATA_READY pin signals the Pi that we have outgoing data. The Pi
  * can also initiate a transaction at any time to push data to us.
  *
- * Pin assignments – compact ESP32-C5 host board (hardware FSPI pads):
- *   MOSI  GPIO3             ← Pi SPI0 MOSI pin 19
- *   MISO  GPIO8             → Pi SPI0 MISO pin 21
- *   SCLK  GPIO6  (FSPICLK) ← Pi SPI0 SCLK pin 23
- *   CS    GPIO10 (FSPICS0) ← Pi SPI0 CE0  pin 24
- *   DATA_READY GPIO25 (output) → Pi BCM GPIO25 / pin 22
- *   HANDSHAKE  GPIO26 (input)  ← Pi BCM GPIO24 / pin 18
+ * Pin assignments – compact ESP32-C5 host board:
+ *   MOSI  GPIO23            ← Pi SPI0 MOSI  pin 19
+ *   MISO  GPIO24            → Pi SPI0 MISO  pin 21
+ *   SCLK  GPIO6  (FSPICLK) ← Pi SPI0 SCLK  pin 23
+ *   CS    GPIO10 (FSPICS0) ← Pi BCM17       pin 11  (manual CS, not CE0)
+ *   DATA_READY GPIO25 (output) → Pi BCM25   pin 22
+ *   HANDSHAKE  GPIO26 (input)  ← Pi BCM24   pin 18
  *
- *   GPIO3/GPIO8 use GPIO matrix routing (not dedicated FSPI IO_MUX pads)
- *   because ESP32-C5 SPI2 slave mode has a direction bug on dedicated pads.
+ *   GPIO23/GPIO24 use GPIO matrix routing to avoid the ESP32-C5 SPI2 slave
+ *   IO_MUX direction bug (dedicated FSPI pads behave as master-direction).
  *
  * NOTE: Named kwm_spi_* to avoid colliding with the ESP-IDF HAL component
  *       (components/hal/spi_slave_hal.c which also defines spi_slave_hal_init).
@@ -31,18 +31,16 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_cache.h"
+#include "esp_heap_caps.h"
 #include "kwm_protocol.h"
 
 static const char *TAG = "kwm_spi";
 
 /* ── Internal state ──────────────────────────────────────────────────────── */
 
-/* DMA buffers must be 64-byte aligned (ESP32-C5 dcache line size).
- * esp_cache_msync() requires this alignment; WORD_ALIGNED_ATTR (4 bytes)
- * is not sufficient and causes "invalid addr" errors. */
-static uint8_t s_tx_dma_buf[KWM_SPI_FRAME_LEN] __attribute__((aligned(64)));
-static uint8_t s_rx_dma_buf[KWM_SPI_FRAME_LEN] __attribute__((aligned(64)));
+/* DMA buffers: heap-allocated, non-cached SRAM on ESP32-C5 (no cache sync needed). */
+static uint8_t *s_tx_dma_buf;
+static uint8_t *s_rx_dma_buf;
 
 /* Ring queues of heap-allocated frame copies. */
 static QueueHandle_t s_tx_queue;   /* frames waiting to go to Pi  */
@@ -62,6 +60,15 @@ static void update_data_ready(void);
 
 esp_err_t kwm_spi_init(void) {
     esp_err_t ret;
+
+    /* Allocate DMA buffers from heap. On ESP32-C5, MALLOC_CAP_DMA returns
+     * non-cached SRAM; DMA and CPU share it directly — no cache sync needed. */
+    s_tx_dma_buf = heap_caps_aligned_alloc(4, KWM_SPI_FRAME_LEN, MALLOC_CAP_DMA);
+    s_rx_dma_buf = heap_caps_aligned_alloc(4, KWM_SPI_FRAME_LEN, MALLOC_CAP_DMA);
+    if (!s_tx_dma_buf || !s_rx_dma_buf) {
+        ESP_LOGE(TAG, "Failed to allocate DMA buffers");
+        return ESP_ERR_NO_MEM;
+    }
 
     /* Build the standing NOOP frame once. */
     kwm_spi_frame_build(s_noop_frame, KWM_CMD_NOOP, 0, KWM_FLAG_NONE, 0, NULL, 0);
@@ -216,16 +223,8 @@ static void spi_slave_task(void *pvParam) {
             .rx_buffer = s_rx_dma_buf,
         };
 
-        /* Flush TX buffer from L1 cache to DRAM so DMA reads fresh data.
-         * Requires 64-byte aligned buffer (ESP32-C5 dcache line size). */
-        esp_cache_msync(s_tx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
-
         /* Block until Pi initiates a transaction (CS falling edge). */
         esp_err_t ret = spi_slave_transmit(KWM_SPI_HOST, &t, portMAX_DELAY);
-
-        /* Invalidate RX buffer in L1 cache so CPU reads DMA-written DRAM data. */
-        if (ret == ESP_OK)
-            esp_cache_msync(s_rx_dma_buf, KWM_SPI_FRAME_LEN, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
 
         if (ret != ESP_OK) {
             ESP_LOGW(TAG, "spi_slave_transmit error: %s", esp_err_to_name(ret));

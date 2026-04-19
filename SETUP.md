@@ -33,16 +33,16 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 │                                                                  │
 │  Klipper (klippy.py)                                             │
 │       │  /dev/kwm0   /dev/kwm1  …  PTY symlinks                 │
-│  klipper_bridge.py  ←──── spi_driver.py                         │
+│  klipper_bridge.py  ←──── uart_driver.py                        │
 │       │                        │                                 │
-│  GPIO25 (DATA_READY ←)    SPI0 (MOSI/MISO/SCLK/CE0)            │
-│  GPIO24 (HANDSHAKE  →)                                           │
+│  BCM14/TXD (pin 8)        /dev/ttyAMA0  (1 Mbaud)               │
+│  BCM15/RXD (pin 10)                                              │
 └──────────────────────────────┬──────────────────────────────────┘
-                               │  256-byte SPI frames (10 MHz)
-                               │  Full-duplex, SPI mode 3
+                               │  256-byte KWM frames @ 1 Mbaud
+                               │  UART, 8N1, no flow control
                     ┌──────────┴──────────┐
-                    │  Host ESP32-C5       │  compact "Super Mini"
-                    │  WiFi 6 soft-AP      │  4 MB flash
+                    │  Host XIAO ESP32-C5  │  Seeed XIAO ESP32-C5
+                    │  WiFi 6 soft-AP      │  8 MB flash
                     │  TCP server :8842    │  192.168.42.1
                     └──────────┬──────────┘
                                │  WiFi 6  (802.11ax, OFDMA)
@@ -50,9 +50,9 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
               ┌────────────────┼────────────────┐
               │                │                │
    ┌──────────┴──────┐ ┌───────┴───────┐  (up to 8 MCU ESPs)
-   │ MCU ESP32-C5 #0 │ │ MCU ESP32-C5 │
-   │ WiFi 6 STA      │ │ WiFi 6 STA   │
-   │ TCP client      │ │ TCP client   │
+   │ MCU XIAO #0     │ │ MCU XIAO #1   │
+   │ WiFi 6 STA      │ │ WiFi 6 STA    │
+   │ TCP client      │ │ TCP client    │
    └──────────┬──────┘ └───────┬───────┘
               │ UART1 250000   │ UART1 250000
               │ 8N1            │ 8N1
@@ -65,8 +65,8 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 ### Data path (Pi → MCU)
 
 1. Klipper writes serial bytes to `/dev/kwm0` (PTY slave).
-2. `klipper_bridge.py` reads from the PTY master, packs a 256-byte SPI frame.
-3. Pi5 pushes the frame to the Host ESP32-C5 over SPI.
+2. `klipper_bridge.py` reads from the PTY master, packs a 256-byte KWM frame.
+3. Pi5 sends the frame to the Host XIAO over UART (`/dev/ttyAMA0`, 1 Mbaud).
 4. Host ESP routes the payload over TCP to the matching MCU ESP connection.
 5. MCU ESP writes the bytes out UART1 to the STM32.
 
@@ -74,8 +74,8 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 
 1. STM32 sends bytes over UART to MCU ESP.
 2. MCU ESP wraps them in a TCP frame and sends to Host ESP.
-3. Host ESP builds a 256-byte SPI frame and asserts DATA_READY (GPIO25 → Pi GPIO8).
-4. Pi5 receives the interrupt, performs an SPI transfer, unpacks the frame.
+3. Host ESP builds a 256-byte KWM frame and writes it to its UART TX.
+4. Pi5 reads the frame from `/dev/ttyAMA0`, unpacks it.
 5. `klipper_bridge.py` writes the payload to the correct PTY master.
 6. Klipper reads the bytes from the PTY slave `/dev/kwm0`.
 
@@ -85,56 +85,49 @@ a normal serial device (`/dev/kwm0`, `/dev/kwm1`, …).
 
 | Qty | Component | Notes |
 |-----|-----------|-------|
-| 1 | **Raspberry Pi 5** (2GB+ RAM) | Host computer running Klipper |
-| 1 | **ESP32-C5 compact board** ("Super Mini") | Host ESP — SPI to Pi, WiFi AP |
-| 1+ | **Seeed Studio XIAO ESP32C5** | MCU ESP — one per Klipper MCU |
+| 1 | **Raspberry Pi 5** (2 GB+ RAM) | Host computer running Klipper |
+| 1 | **Seeed XIAO ESP32-C5** | Host ESP — UART to Pi, WiFi AP |
+| 1+ | **Seeed XIAO ESP32-C5** | MCU ESP — one per Klipper MCU |
 | 1+ | **STM32 Klipper MCU board** | e.g. SKR, Octopus, etc. |
-| — | Dupont/JST wires | SPI + GPIO from Pi to Host ESP |
-| — | UART wires (2) | TX/RX from MCU ESP to STM32 |
+| — | 3 dupont wires | TX/RX/GND from Pi to Host XIAO |
+| — | 2 dupont wires (+ GND) | TX/RX from MCU XIAO to STM32 |
 
-> **Up to 8 MCU-side ESPs** are supported simultaneously via WiFi 6 OFDMA.
+> **Both the host-side and MCU-side boards are the same hardware** — a Seeed
+> XIAO ESP32-C5.  Flash `host_esp` firmware to the Pi-facing board and
+> `mcu_esp` firmware to each STM32-facing board.
+
+> **Up to 8 MCU-side XIAOs** are supported simultaneously via WiFi 6 OFDMA.
 
 ---
 
 ## 3. Wiring
 
-### Pi5 ↔ Host ESP32-C5 (SPI + GPIO)
+### Pi5 ↔ Host XIAO ESP32-C5 (UART)
+
+3 wires total.  Cross TX↔RX as normal for UART.
 
 ```
-Pi 5 Header Pin   BCM GPIO   ESP32-C5 Compact Pin   Signal
-──────────────────────────────────────────────────────────
-Pin 19            MOSI       GPIO7  (FSPID)          SPI data Pi→ESP
-Pin 21            MISO       GPIO2  (FSPIQ)          SPI data ESP→Pi
-Pin 23            SCLK       GPIO6  (FSPICLK)        SPI clock
-Pin 24            CE0        GPIO10 (FSPICS0)        SPI chip-select
-Pin 22  (BCM 25)  GPIO25     GPIO25                  DATA_READY (ESP→Pi)
-Pin 18  (BCM 24)  GPIO24     GPIO26                  HANDSHAKE  (Pi→ESP)
-Pin 6             GND        GND                     Common ground
-Pin 1             3.3 V      3.3 V                   Power (if not USB)
+Pi 5 Header       BCM     XIAO ESP32-C5 Pin   Signal
+─────────────────────────────────────────────────────
+Pin  8  (TXD)     BCM14 → D7 / GPIO12 (RX)    Pi→ESP data
+Pin 10  (RXD)     BCM15 ← D6 / GPIO11 (TX)    ESP→Pi data
+Pin 6   (GND)     GND   — GND                 Common ground
 ```
 
-> **Note:** BCM GPIO8 (pin 24) and GPIO7 (pin 26) are the SPI CE0/CE1 lines
-> and are claimed by the kernel SPI driver.  DATA_READY and HANDSHAKE must
-> use different pins.
+> The Host XIAO is powered via its USB-C connector.  No power wire from the
+> Pi is needed (and none should be connected if the XIAO is USB-powered).
 
-> The Host ESP is powered via its USB connector for flashing and can remain
-> USB-powered in use, or powered from the Pi's 3.3 V rail if current allows
-> (the ESP32-C5 idle draw is ~20 mA, ~120 mA peak Tx).
-
-### MCU ESP32-C5 (XIAO) ↔ STM32 (UART)
+### MCU XIAO ESP32-C5 ↔ STM32 (UART)
 
 ```
-XIAO ESP32C5 Pin   STM32 Pin      Signal
-─────────────────────────────────────────
-D6 / GPIO11 (TX) →  UART RX pin   Serial data ESP→STM32
-D7 / GPIO12 (RX) ←  UART TX pin   Serial data STM32→ESP
-GND              —  GND           Common ground
+XIAO ESP32-C5 Pin   STM32 Pin      Signal
+──────────────────────────────────────────
+D6 / GPIO11 (TX) →  UART RX pin    Serial data ESP→STM32
+D7 / GPIO12 (RX) ←  UART TX pin    Serial data STM32→ESP
+GND              —   GND           Common ground
 ```
 
-> The MCU ESP is powered via USB. It does not need a wired connection to the
-> Pi — only to the STM32 UART and a USB power source.
->
-> Baud rate: **250000** (standard Klipper serial rate; hardcoded in firmware).
+> Baud rate: **250 000** (standard Klipper serial rate; compiled into firmware).
 
 ---
 
@@ -149,8 +142,7 @@ Install [PlatformIO Core](https://docs.platformio.org/en/latest/core/installatio
 pip install platformio
 ```
 
-Install the pioarduino platform (provides IDF 5.5 + RISC-V toolchain with
-ESP32-C5 support — one-time, ~700 MB download):
+Install the pioarduino platform (IDF 5.5 + RISC-V toolchain — ~700 MB, one-time):
 
 ```powershell
 pio pkg install -g -p "https://github.com/pioarduino/platform-espressif32/releases/download/55.03.38-1/platform-espressif32.zip"
@@ -158,14 +150,13 @@ pio pkg install -g -p "https://github.com/pioarduino/platform-espressif32/releas
 
 ### On the Pi5
 
-See [section 7](#7-pi5-setup) for the full Pi5 configuration walkthrough
-(system update, package install, SPI enable, permissions, repo clone).
+See [section 7](#7-pi5-setup) for the full Pi5 setup walkthrough.
 
 ---
 
 ## 5. Build and Flash — Host ESP32-C5
 
-The host firmware runs on the compact ESP32-C5 board connected to the Pi via SPI.
+The host firmware runs on the XIAO ESP32-C5 board connected to the Pi via UART.
 
 ### Build
 
@@ -183,33 +174,24 @@ On Linux/macOS:
 pio run -e host_esp
 ```
 
-The firmware binary is at:
-
-```
-.pio/build/host_esp/firmware.factory.bin
-```
+Binary at: `.pio/build/host_esp/firmware.factory.bin`
 
 ### Flash
 
-1. Connect the Host ESP32-C5 to your PC via USB (use the **bottom** USB
-   connector on the compact board — this is the USB Serial/JTAG port).
-2. Hold the **BOOT** button while pressing **RESET**, then release BOOT.
-   (Or just plug in with BOOT held for boards that auto-enter bootloader.)
+Connect the Host XIAO to your PC via USB-C.
 
 ```powershell
 pio run -e host_esp -t upload
 ```
 
-On Linux, if you get a permission error on `/dev/ttyUSBx`:
+On Linux, if you get a permission error on the serial device:
 
 ```bash
 sudo usermod -aG dialout $USER   # log out and back in
 pio run -e host_esp -t upload
 ```
 
-### Verify the host ESP is running
-
-Monitor the serial output (115200 baud):
+### Verify
 
 ```powershell
 pio device monitor -e host_esp
@@ -219,20 +201,21 @@ Expected output on boot:
 
 ```
 I (xxx) main: === Klipper WiFi MCU - Host ESP32-C5 ===
-I (xxx) main: IDF 5.5.4 | cores=1 | flash=4MB
-I (xxx) main: Protocol: SPI frame 256 bytes | TCP port 8842 | max MCUs 8
-I (xxx) wifi_ap: WiFi 6 AP started: SSID=KlipperMesh (hidden) channel=6 IP=192.168.42.1
+I (xxx) main: IDF 5.5.4 | cores=1
+I (xxx) main: TCP port 8842 | max MCUs 8
+I (xxx) kwm_uart: UART1 ready (TX=11 RX=12 baud=1000000)
+I (xxx) wifi_ap: WiFi 6 AP started: SSID=KlipperMesh (hidden) IP=192.168.42.1
 I (xxx) tcp_server: TCP server listening on port 8842
 I (xxx) bridge: Bridge initialised
+I (xxx) main: Host firmware ready. Waiting for Pi UART and MCU connections.
 ```
 
 ---
 
 ## 6. Build and Flash — MCU ESP32-C5 (XIAO)
 
-**All MCU-side boards use the same firmware binary.** No per-device
-configuration is needed before flashing.  Each board derives its own MCU ID
-(0–7) at runtime from its hardware MAC address.
+**All MCU-side boards use the same firmware binary.**  Each derives its own
+MCU ID (0–7) at runtime from its hardware MAC address.
 
 ### Build
 
@@ -240,53 +223,41 @@ configuration is needed before flashing.  Each board derives its own MCU ID
 pio run -e mcu_esp
 ```
 
-Binary at:
+Binary at: `.pio/build/mcu_esp/firmware.factory.bin`
 
-```
-.pio/build/mcu_esp/firmware.factory.bin
-```
-
-### Flash (repeat for every XIAO ESP32C5)
-
-Connect the XIAO ESP32C5 to your PC via USB-C.
+### Flash (repeat for every MCU XIAO)
 
 ```powershell
 pio run -e mcu_esp -t upload
 ```
 
-### Verify each MCU ESP is running
+### Verify
 
 ```powershell
 pio device monitor -e mcu_esp
 ```
 
-Expected output on boot:
+Expected output:
 
 ```
 I (xxx) main: === Klipper WiFi MCU - MCU Bridge ESP32-C5 ===
-I (xxx) main: IDF 5.5.4
 I (xxx) main: MAC  ac:15:18:3a:b2:7f
 I (xxx) main: MCU ID = 3  (hash of MAC[3:5] mod 8)
-I (xxx) main: Pi PTY will appear as /dev/kwm3
 I (xxx) wifi_sta: Connected to AP 'KlipperMesh'
 I (xxx) tcp_client: TCP connected to host (fd=4)
 I (xxx) tcp_client: Sent CONNECT: mcu_id=3  MAC=ac:15:18:3a:b2:7f
 ```
 
-The MCU ID (3 in this example) is **stable across reboots** — the same board
-always gets the same ID.  Record the MAC → ID mapping for each board so you
-know which PTY to reference in `printer.cfg`.
+Record the MAC → ID mapping for each board so you know which PTY to reference
+in `printer.cfg`.
 
 ### If two boards collide on the same ID
 
-The FNV hash of the MAC is spread across 8 slots; collision probability is
-low for small fleets (≈12 % chance with 2 boards, ≈26 % with 3).  If a
-collision occurs both boards will log the same ID and one will kick the other
-off the host.  Resolution: use the NVS shell on one board to override its ID:
+Collision probability is low (≈12 % with 2 boards).  If it occurs, both boards
+log the same ID and one will kick the other off the host.  Override one board's
+ID via NVS at the monitor prompt:
 
 ```
-idf.py monitor   # or pio device monitor
-# at the esp> prompt:
 nvs_set kwm mcu_id u8 5
 ```
 
@@ -296,7 +267,7 @@ nvs_set kwm mcu_id u8 5
 
 ## 7. Pi5 Setup
 
-Work through these steps in order on a fresh Pi OS Lite install.
+Work through these steps on a **fresh Pi OS Lite (64-bit) install**.
 
 ### Step 1 — Update the system
 
@@ -308,105 +279,64 @@ sudo reboot
 ### Step 2 — Install dependencies
 
 ```bash
-sudo apt install -y python3-spidev python3-libgpiod git
+sudo apt install -y python3-serial git
 ```
 
-> The GPIO Python bindings package is named `python3-libgpiod` on Pi OS
-> Bookworm and Trixie (not `python3-gpiod`).  Both install the same
-> `gpiod` Python module.
-
-Verify Python 3 is available (Pi OS Lite ships with it, but worth confirming):
+Verify Python 3 is available:
 
 ```bash
-python3 --version
-# Python 3.11.x or newer
+python3 --version   # Python 3.11.x or newer
 ```
 
-### Step 3 — Enable the SPI interface
+### Step 3 — Disable Bluetooth to free the hardware UART
+
+The Pi5's primary UART (`/dev/ttyAMA0`, BCM14/15) is claimed by Bluetooth by
+default.  Disable it:
 
 ```bash
-sudo raspi-config
-# Interface Options → SPI → Enable → Finish → Yes (reboot when prompted)
-```
-
-Or non-interactively:
-
-```bash
-sudo raspi-config nonint do_spi 0
+echo "dtoverlay=disable-bt" | sudo tee -a /boot/firmware/config.txt
 sudo reboot
 ```
 
-After reboot, verify the SPI device nodes appeared:
+After reboot, verify the UART device is available:
 
 ```bash
-ls /dev/spidev0.*
-# Expected: /dev/spidev0.0  /dev/spidev0.1
+ls /dev/ttyAMA0   # should exist
 ```
 
-If the files are missing, SPI was not enabled.  Check
-`/boot/firmware/config.txt` and confirm it contains `dtparam=spi=on`.
-
-### Step 4 — Permissions
-
-#### SPI
-
-`/dev/spidev0.0` is owned by `root:spi` (mode 660).  The bridge daemon runs
-as root via systemd (section 11), so no change is needed for normal
-operation.
-
-For running the daemon **manually without `sudo`** (useful during testing),
-add your user to the `spi` group:
+And confirm it is no longer held by Bluetooth:
 
 ```bash
-sudo usermod -aG spi $USER
+sudo systemctl status hciuart   # should show "masked" or "not-found"
 ```
 
-#### GPIO
+### Step 4 — Add your user to the `dialout` group
 
-`/dev/gpiochip4` is owned by `root:gpio` (mode 660).  Same situation — root
-is fine for the service, but add yourself to `gpio` for manual testing:
-
-```bash
-sudo usermod -aG gpio $USER
-```
-
-Apply both group changes in one go and re-login:
+`/dev/ttyAMA0` is owned by `root:dialout`.  The bridge service runs as root so
+this is only needed for manual testing without `sudo`:
 
 ```bash
-sudo usermod -aG spi,gpio $USER
+sudo usermod -aG dialout $USER
 # Log out and back in, then verify:
-groups   # should include spi and gpio
+groups   # should include dialout
 ```
 
-### Step 5 — Verify GPIO chip
-
-Pi 5 uses `/dev/gpiochip4` (older Pi models use gpiochip0).  Confirm it
-exists:
-
-```bash
-ls /dev/gpiochip*
-# Should include /dev/gpiochip4
-```
-
-The bridge daemon defaults to `/dev/gpiochip4` — no configuration needed
-unless you are running on a non-Pi 5 board.
-
-### Step 6 — Clone the repository
+### Step 5 — Clone the repository
 
 ```bash
 cd ~
-git clone --branch Simple-ESP-Wifi --single-branch https://github.com/53Aries/Klipper_WiFi_MCU.git
+git clone --branch UART --single-branch https://github.com/53Aries/Klipper_WiFi_MCU.git
 cd Klipper_WiFi_MCU
 ```
 
-### Step 7 — Install the bridge service
+### Step 6 — Install the bridge service
 
-Create `/etc/systemd/system/kwm-bridge.service`:
+Run this from inside the `Klipper_WiFi_MCU` directory:
 
 ```bash
 sudo tee /etc/systemd/system/kwm-bridge.service > /dev/null << EOF
 [Unit]
-Description=Klipper WiFi MCU SPI bridge daemon
+Description=Klipper WiFi MCU UART bridge daemon
 After=network.target
 Before=klipper.service
 
@@ -424,9 +354,6 @@ WantedBy=multi-user.target
 EOF
 ```
 
-> Run this command from inside the `Klipper_WiFi_MCU` directory so that
-> `$(pwd)` resolves to the correct path.
-
 Enable and start:
 
 ```bash
@@ -436,8 +363,7 @@ sudo systemctl start kwm-bridge
 sudo systemctl status kwm-bridge
 ```
 
-The service will now start automatically on every boot, before Klipper.
-Check logs at any time with:
+Check logs:
 
 ```bash
 sudo journalctl -u kwm-bridge -f
@@ -447,54 +373,46 @@ sudo journalctl -u kwm-bridge -f
 
 ## 8. Running the Bridge Daemon
 
-> The systemd service (section 7, step 7) is the normal way to run the
-> bridge.  Use the manual invocation below only for debugging.
+> The systemd service (section 7, step 6) is the normal way to run the bridge.
+> Use the manual command below only for debugging.
 
 ```bash
 sudo python3 pi_host/klipper_bridge.py
 ```
 
-No arguments needed.  The daemon pre-creates PTY symlinks for all 8 possible
-MCU IDs (`/dev/kwm0` – `/dev/kwm7`) at startup.  Any MCU ESP that connects
-over WiFi is automatically routed to the correct slot.  Klipper can open the
-PTY even before the MCU ESP physically connects.
+No arguments needed for default operation.  The daemon pre-creates PTY
+symlinks for all 8 MCU IDs (`/dev/kwm0`–`/dev/kwm7`) at startup.
 
 ### All options
 
 ```
---mcus ID [ID ...]     MCU IDs to bridge (default: all 8, i.e. 0-7)
---spi-bus N            SPI bus number (default: 0)
---spi-dev N            SPI device/CE number (default: 0)
---spi-speed HZ         SPI clock in Hz (default: 10000000 = 10 MHz)
---gpio-chip PATH       GPIO chip device (default: /dev/gpiochip4)
---pin-dr BCM           BCM GPIO for DATA_READY input (default: 25)
---pin-hs BCM           BCM GPIO for HANDSHAKE output (default: 24)
+--mcus ID [ID ...]     MCU IDs to create PTYs for (default: 0-7)
+--port PATH            UART device (default: /dev/ttyAMA0)
+--baudrate N           Baud rate (default: 1000000)
 --verbose / -v         Enable debug logging
 ```
 
 ### Expected startup output
 
 ```
-2026-04-16 12:00:01 klipper_bridge INFO SPI opened: bus=0 dev=0 speed=10000000
-2026-04-16 12:00:01 klipper_bridge INFO MCU 0 PTY: /dev/pts/2
-2026-04-16 12:00:01 klipper_bridge INFO MCU 0 symlink: /dev/kwm0 -> /dev/pts/2
-2026-04-16 12:00:01 klipper_bridge INFO MCU 1 PTY: /dev/pts/3
-2026-04-16 12:00:01 klipper_bridge INFO MCU 1 symlink: /dev/kwm1 -> /dev/pts/3
-2026-04-16 12:00:01 klipper_bridge INFO Bridge running. Ctrl-C to stop.
+2026-04-18 12:00:01 klipper_bridge INFO UART opened: /dev/ttyAMA0 @ 1000000 baud
+2026-04-18 12:00:01 klipper_bridge INFO MCU 0 PTY: /dev/pts/2
+2026-04-18 12:00:01 klipper_bridge INFO MCU 0 symlink: /dev/kwm0 -> /dev/pts/2
+...
+2026-04-18 12:00:01 klipper_bridge INFO Bridge running. MCUs: [0, 1, 2, 3, 4, 5, 6, 7]
 ```
 
-When an MCU ESP connects over WiFi, the host ESP logs (visible on the host
-serial monitor):
+When an MCU ESP connects over WiFi:
 
 ```
-I tcp_server: MCU 3 connected  MAC=ac:15:18:3a:b2:7f  → /dev/kwm3
+2026-04-18 12:00:05 klipper_bridge INFO MCU 3 connected (MAC: ac:15:18:3a:b2:7f)
 ```
 
 ---
 
 ## 9. Klipper Configuration
 
-Edit `~/printer_data/config/printer.cfg` (or wherever your config lives).
+Edit `~/printer_data/config/printer.cfg`.
 
 ### Single additional MCU
 
@@ -505,94 +423,71 @@ serial: /dev/kwm0
 
 ### Multiple MCUs
 
-Each MCU needs its own `[mcu name]` section.  Use the ID reported by the MCU
-ESP at boot (visible in its serial monitor output).
-
 ```ini
 [mcu mcu0]
 serial: /dev/kwm0
-
-[mcu mcu1]
-serial: /dev/kwm1
 
 [mcu mcu3]
 serial: /dev/kwm3
 ```
 
-Then reference MCU-specific pins as usual:
+Reference MCU-specific pins as usual:
 
 ```ini
 [stepper_x]
-step_pin: mcu1:PA1
-dir_pin:  mcu1:PA2
-...
+step_pin: mcu0:PA1
+dir_pin:  mcu0:PA2
 ```
 
 ### Notes
 
-- The bridge daemon must be running and the symlinks must exist **before**
-  Klipper attempts to connect.  Use the systemd service described in section 11
-  to ensure correct start order.
-- Klipper reconnects automatically if the serial link drops (e.g. MCU ESP
-  reboots and reconnects via WiFi).  The PTY stays open on the Pi side so
-  Klipper sees a continuous device; only the underlying WiFi/TCP path
-  reconnects behind the scenes.
+- The bridge daemon must be running before Klipper attempts to connect.  The
+  systemd service ordering (`Before=klipper.service`) handles this automatically.
+- Klipper reconnects automatically if the link drops — the PTY stays open on
+  the Pi side; only the WiFi/TCP path reconnects behind the scenes.
 
 ---
 
 ## 10. Verifying Operation
 
-### Check bridge daemon logs
+### Check bridge logs
 
 ```bash
-sudo journalctl -u kwm-bridge -f   # if running as service
-# or watch the terminal where you started the daemon
+sudo journalctl -u kwm-bridge -f
 ```
 
 ### Check host ESP serial monitor
-
-Connect the Host ESP via USB and open a monitor while the system is running:
 
 ```powershell
 pio device monitor -e host_esp
 ```
 
-You should see per-MCU connection events and a periodic status line:
+Expected periodic status line:
 
 ```
-I main: Heap free: 284312 bytes | SPI rx pending: 0 | WiFi STAs: 2
-I tcp_server: MCU 0 connected  MAC=ac:15:18:aa:bb:cc  → /dev/kwm0
-I tcp_server: MCU 3 connected  MAC=ac:15:18:3a:b2:7f  → /dev/kwm3
+I main: Heap free: 284312 bytes | UART rx pending: 0 | WiFi STAs: 2
 ```
 
-### Check MCU ESP serial monitor (one at a time)
+### Check MCU ESP serial monitor
 
 ```powershell
 pio device monitor -e mcu_esp
 ```
 
-Normal running state:
-
-```
-I tcp_client: TCP connected to host (fd=4)
-I tcp_client: Sent CONNECT: mcu_id=0  MAC=ac:15:18:aa:bb:cc
-I kwm_uart: UART RX task started (port=1 baud=250000 TX=16 RX=17)
-```
-
-### Confirm PTY symlinks exist on Pi
+### Confirm PTY symlinks on Pi
 
 ```bash
 ls -la /dev/kwm*
-# lrwxrwxrwx 1 root root 10 Apr 16 12:00 /dev/kwm0 -> /dev/pts/2
-# lrwxrwxrwx 1 root root 10 Apr 16 12:00 /dev/kwm3 -> /dev/pts/5
+# lrwxrwxrwx 1 root root 10 ... /dev/kwm0 -> /dev/pts/2
 ```
 
-### Send a test byte from the Pi
+### Send a test frame from the Pi
 
 ```bash
 python3 - <<'EOF'
-from pi_host.spi_driver import SpiDriver
-d = SpiDriver()
+import sys; sys.path.insert(0, 'pi_host')
+from uart_driver import UartDriver
+d = UartDriver()
 d.open()
 d.send(mcu_id=0, data=b'\x01\x02\x03')
 print("sent")
@@ -604,8 +499,7 @@ EOF
 
 ## 11. Systemd Service (Auto-start)
 
-See [section 7, step 7](#step-7--install-the-bridge-service) — the service
-is installed as part of the Pi5 setup.
+See [section 7, step 6](#step-6--install-the-bridge-service).
 
 ---
 
@@ -617,16 +511,16 @@ is installed as part of the Pi5 setup.
 |-----------|-------|
 | SSID | `KlipperMesh` (hidden) |
 | Password | `klipper42!` |
-| Security | WPA3-SAE (PMF required) |
+| Security | WPA3-SAE |
 | Band | 2.4 GHz, channel 6 |
 | Standard | 802.11ax (WiFi 6) with OFDMA |
 | AP IP | `192.168.42.1` |
-| DHCP range | `192.168.42.x` (assigned to MCU ESPs) |
 | TCP port | `8842` |
 
-### SPI frame (Pi ↔ Host ESP)
+### UART frame (Pi ↔ Host ESP)
 
-Fixed 256-byte full-duplex; both sides transmit simultaneously every transfer.
+Fixed 256 bytes per frame.  The Pi sends one frame per chunk of Klipper serial
+data; the ESP sends one frame per TCP payload received from a MCU.
 
 ```
 Offset  Size  Field
@@ -674,9 +568,6 @@ Offset  Size  Field
 ### MCU ID derivation
 
 ```python
-# Equivalent Python
-import struct, hashlib
-
 def mac_to_mcu_id(mac_bytes: bytes, max_mcu: int = 8) -> int:
     """FNV-1a 32-bit hash of MAC[3:5], folded to [0, max_mcu)."""
     h = 2166136261
@@ -696,79 +587,69 @@ Covers all bytes before the 2-byte CRC field.
 
 ### Host ESP won't boot / no serial output
 
-- Check that you flashed `host_esp`, not `mcu_esp`.
-- Use the bottom USB connector on the compact board (USB Serial/JTAG).
-- Hold BOOT, press RESET, release BOOT to enter bootloader mode manually.
+- Confirm you flashed `host_esp`, not `mcu_esp`.
+- Use the USB-C connector on the XIAO (USB Serial/JTAG port).
+- Hold BOOT, press RESET, release BOOT to enter bootloader manually if needed.
+
+### No UART communication (Pi ↔ Host ESP)
+
+- Confirm `dtoverlay=disable-bt` is in `/boot/firmware/config.txt` and the Pi
+  has been rebooted — without this, Bluetooth holds `/dev/ttyAMA0`.
+- Verify TX and RX are **crossed**: Pi TXD (pin 8) → XIAO D7/RX (GPIO12) and
+  Pi RXD (pin 10) ← XIAO D6/TX (GPIO11).
+- Confirm `/dev/ttyAMA0` exists: `ls /dev/ttyAMA0`.
+- Run the bridge with `--verbose` and check for "UART opened" in the logs.
 
 ### MCU ESP won't connect to WiFi
 
-- Confirm the host ESP is powered and running (its LED or the serial monitor).
-- The SSID is **hidden** — the MCU must know it in advance (it does, it's
-  compiled in).
-- WPA3-SAE requires both sides to support it; the ESP32-C5 does.
-- Check channel 6 is not blocked by local interference; change
-  `KWM_WIFI_CHANNEL` in `kwm_protocol.h` and rebuild both firmwares.
-
-### MCU IDs colliding (two boards, same ID)
-
-See end of [section 6](#6-build-and-flash--mcu-esp32-c5).  Check both boards'
-boot logs to confirm which MACs are colliding.
+- Confirm the host ESP is powered and running (check its serial monitor).
+- The SSID is **hidden** — the MCU firmware knows it at compile time.
+- Check channel 6 is not blocked; change `KWM_WIFI_CHANNEL` in
+  `kwm_protocol.h` and rebuild both firmwares.
 
 ### Klipper reports "Unable to connect" on `/dev/kwmN`
 
-1. Confirm the bridge daemon is running: `sudo systemctl status kwm-bridge`.
-2. Confirm the symlink exists: `ls -la /dev/kwmN`.
-3. Confirm the MCU ESP has connected — check host serial monitor for the
-   `MCU N connected` log line.
-4. Check that the ID in `printer.cfg` matches the ID the board actually got
+1. `sudo systemctl status kwm-bridge` — confirm the daemon is running.
+2. `ls -la /dev/kwmN` — confirm the symlink exists.
+3. Check bridge logs for the `MCU N connected` event.
+4. Confirm the ID in `printer.cfg` matches the ID the board actually got
    (read its boot log).
 
 ### Klipper serial errors / "Protocol error"
 
-- This almost always means a byte was lost or corrupted in transit.
-- Check SPI wiring — use short wires (<20 cm), ensure good ground between Pi
-  and Host ESP.
-- The SPI clock is 10 MHz; if you see intermittent errors, try 4 MHz by
-  passing `--spi-speed 4000000` to the bridge daemon.
-- Check that `TCP_NODELAY` is in effect (it is by default in this firmware).
-  Without it, Nagle's algorithm introduces ~40 ms buffering per message.
+- Usually a dropped byte.  Check UART wiring — keep wires under 20 cm.
+- Confirm baud rate matches: both sides must be 1 000 000.
+- If intermittent, try running the bridge with `--baudrate 500000` and rebuild
+  firmware with `KWM_HOST_UART_BAUD 500000`.
 
 ### High latency / Klipper timing errors
 
-- Ensure the MCU ESP is running with `WIFI_PS_NONE` (it is by default in this
-  firmware).  If you compiled your own build and see latency, check that
-  `esp_wifi_set_ps(WIFI_PS_NONE)` is called in `wifi_sta.c`.
+- Ensure MCU ESP runs with `WIFI_PS_NONE` (default in this firmware).
 - Move the host ESP closer to the MCU ESPs, or reduce interference on channel 6.
-- WiFi 6 OFDMA means multiple MCUs transmit simultaneously on sub-carriers;
-  latency should be consistent even with several boards.
+- Check MCU ESP RSSI: should be above −70 dBm for reliable operation.
 
 ### TCP connection keeps dropping
 
-- The firmware uses keepalive: idle=5 s, interval=2 s, count=3.  A dead
-  connection is detected in ~11 seconds, after which the MCU ESP automatically
-  reconnects.
-- If connections drop more often, check WiFi signal strength on the MCU ESP
-  serial monitor — RSSI should be above −70 dBm for reliable operation.
+- Firmware uses keepalive: idle=5 s, interval=2 s, count=3.  Dead connections
+  are detected in ~11 s and the MCU ESP reconnects automatically.
 
 ---
 
 ## 14. Adding More MCUs
 
-1. Flash a new XIAO ESP32C5 with the `mcu_esp` binary (same file, no
-   re-build needed).
-2. Wire it to the new STM32 UART (TX→D6/GPIO11, RX←D7/GPIO12, common GND).
-3. Power it via USB.
+1. Flash a new XIAO ESP32-C5 with `mcu_esp` firmware (same binary, no rebuild).
+2. Wire it to the STM32 UART: TX→D6/GPIO11, RX←D7/GPIO12, common GND.
+3. Power via USB.
 4. Read its boot log to find its auto-assigned MCU ID:
    ```
    I main: MCU ID = 5  (hash of MAC[3:5] mod 8)
-   I main: Pi PTY will appear as /dev/kwm5
    ```
 5. The bridge daemon already has `/dev/kwm5` ready — no restart needed.
-6. Add the new MCU to `printer.cfg`:
+6. Add to `printer.cfg`:
    ```ini
    [mcu mcu5]
    serial: /dev/kwm5
    ```
 7. Restart Klipper.
 
-No reflashing of any existing board and no daemon reconfiguration required.
+No reflashing of existing boards and no daemon reconfiguration required.

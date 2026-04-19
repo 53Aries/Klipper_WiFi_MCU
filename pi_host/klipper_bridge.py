@@ -197,8 +197,8 @@ def main() -> None:
     parser.add_argument("--mcus", nargs="+", type=int, default=list(range(8)),
                         metavar="ID",
                         help="MCU IDs to bridge (default: all 8, i.e. 0-7)")
-    parser.add_argument("--port",     default="/dev/serial0",
-                        help="UART device (default /dev/serial0)")
+    parser.add_argument("--port",     default="/dev/ttyAMA2",
+                        help="UART device (default /dev/ttyAMA2)")
     parser.add_argument("--baudrate", type=int, default=1_000_000,
                         help="Baud rate (default 1000000)")
     parser.add_argument("--verbose", "-v", action="store_true")

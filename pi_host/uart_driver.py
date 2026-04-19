@@ -2,15 +2,16 @@
 uart_driver.py - Pi5 UART driver for KWM host transport
 
 Communicates with the host XIAO ESP32-C5 over a 1 Mbaud UART on
-/dev/serial0 (Bluetooth must be disabled — see setup below).
+/dev/ttyAMA2 (uart2-pi5, GPIO4/5).
 
 Wiring (3 wires total):
-  Pi BCM14 (pin 8,  TXD) → XIAO GPIO12 (D7/RX)
-  Pi BCM15 (pin 10, RXD) ← XIAO GPIO11 (D6/TX)
+  Pi GPIO4 (pin 7,  TXD) → XIAO GPIO12 (D7/RX)
+  Pi GPIO5 (pin 29, RXD) ← XIAO GPIO11 (D6/TX)
   Pi GND   (any GND pin) → XIAO GND
 
 Pi5 one-time setup:
-  1. Add to /boot/firmware/config.txt:   dtoverlay=disable-bt
+  1. Add to /boot/firmware/config.txt:   dtoverlay=disable-bt-pi5
+                                         dtoverlay=uart2-pi5
   2. sudo reboot
   3. sudo apt install python3-serial
 
@@ -106,7 +107,7 @@ def parse_frame(raw: bytes) -> Optional[dict]:
 class UartDriver:
     """Full-duplex UART driver for Pi5 ↔ host ESP32-C5."""
 
-    def __init__(self, port: str = "/dev/serial0", baudrate: int = 1_000_000):
+    def __init__(self, port: str = "/dev/ttyAMA2", baudrate: int = 1_000_000):
         self._port     = port
         self._baudrate = baudrate
         self._ser: Optional[serial.Serial] = None

@@ -21,7 +21,7 @@ if("${BUILD_DIR}" MATCHES "/host_esp")
     idf_component_register(
         SRCS
             "host_esp/main.c"
-            "host_esp/kwm_spi.c"
+            "host_esp/kwm_uart.c"
             "host_esp/wifi_ap.c"
             "host_esp/tcp_server.c"
             "host_esp/bridge.c"

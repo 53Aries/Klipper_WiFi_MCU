@@ -102,32 +102,16 @@ typedef enum {
 #define KWM_AP_IP           "192.168.42.1"
 #define KWM_AP_NETMASK      "255.255.255.0"
 
-/* ── SPI pin defaults (host ESP compact board – matches FSPI pad ring) ──────
+/* ── Host UART pin defaults (Seeed XIAO ESP32-C5) ───────────────────────────
  *
- * Host board pinout (ESP32-C5 compact / DevKitM-1 style):
+ *   GPIO11 (D6/TX) → Pi BCM15 (pin 10, RXD)
+ *   GPIO12 (D7/RX) ← Pi BCM14 (pin  8, TXD)
  *
- *   GPIO6  = FSPICLK  → Pi SPI0 SCLK  (pin 23)
- *   GPIO23            → Pi SPI0 MOSI  (pin 19)   [MOSI into ESP = data from Pi]
- *   GPIO24            → Pi SPI0 MISO  (pin 21)   [MISO out of ESP = data to Pi]
- *   GPIO10 = FSPICS0  → Pi SPI0 CE0   (pin 24)   [active-low CS from Pi]
- *
- *   GPIO23/GPIO24 are pure GPIO pins with no FSPI IO_MUX assignment,
- *   no JTAG function (GPIO2-5 are JTAG), no XTAL_32K (GPIO0/GPIO1),
- *   and no PAD_COMP analog function (GPIO8/GPIO9). GPIO matrix routing
- *   is forced, avoiding the ESP32-C5 SPI2 slave IO_MUX direction bug.
- *   GPIO25            → Pi BCM GPIO25 (pin 22)   DATA_READY: ESP→Pi interrupt
- *   GPIO26            → Pi BCM GPIO24 (pin 18)   HANDSHAKE:  Pi→ESP (optional)
- *
- * Using the hardware FSPI pads avoids GPIO-matrix routing and allows the
- * maximum safe SPI clock speed on this board.
+ * Override with -DKWM_HOST_UART_TX_PIN=N / -DKWM_HOST_UART_RX_PIN=N.
  * ─────────────────────────────────────────────────────────────────────────── */
-#define KWM_SPI_HOST        SPI2_HOST
-#define KWM_PIN_MOSI        23   /* GPIO23 = pure GPIO, no JTAG/XTAL/FSPI conflicts  */
-#define KWM_PIN_MISO        24   /* GPIO24 = pure GPIO, no PAD_COMP/FSPI conflicts   */
-#define KWM_PIN_SCLK        6    /* GPIO6  = FSPICLK                         */
-#define KWM_PIN_CS          10   /* GPIO10 = FSPICS0                         */
-#define KWM_PIN_DATA_READY  25   /* GPIO25, output → Pi BCM GPIO25 (pin 22)  */
-#define KWM_PIN_HANDSHAKE   26   /* GPIO26, input  ← Pi BCM GPIO24 (pin 18)  */
+#define KWM_HOST_UART_TX_PIN  11
+#define KWM_HOST_UART_RX_PIN  12
+#define KWM_HOST_UART_BAUD    1000000
 
 /* ── Frame structs ───────────────────────────────────────────────────────── */
 

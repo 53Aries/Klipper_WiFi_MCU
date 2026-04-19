@@ -35,7 +35,7 @@ import threading
 import time
 import logging
 
-from spi_driver import SpiDriver, CMD_DATA, CMD_CONNECT, CMD_DISCONNECT, PAYLOAD_MAX
+from uart_driver import UartDriver, CMD_DATA, CMD_CONNECT, CMD_DISCONNECT, PAYLOAD_MAX
 
 logging.basicConfig(
     level=logging.INFO,
@@ -121,7 +121,7 @@ class KlipperBridge:
         for mid in mcu_ids:
             self._channels[mid] = PtyChannel(mid)
 
-        self._drv = SpiDriver(**spi_kwargs)
+        self._drv = UartDriver(**spi_kwargs)
         self._running = False
 
     def start(self) -> None:

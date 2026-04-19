@@ -1,5 +1,5 @@
 """
-klipper_bridge.py - Pi5 daemon: SPI ↔ PTY bridge for Klipper
+klipper_bridge.py - Pi5 daemon: UART ↔ PTY bridge for Klipper
 
 Creates one Linux pseudo-terminal (PTY) per MCU ID (0-7 by default).
 Klipper talks to each PTY as if it were a normal serial device.
@@ -116,12 +116,12 @@ class KlipperBridge:
     Main bridge: polls PTYs for outgoing data and SpiDriver for incoming data.
     """
 
-    def __init__(self, mcu_ids: list, spi_kwargs: dict):
+    def __init__(self, mcu_ids: list, drv_kwargs: dict):
         self._channels: dict[int, PtyChannel] = {}
         for mid in mcu_ids:
             self._channels[mid] = PtyChannel(mid)
 
-        self._drv = UartDriver(**spi_kwargs)
+        self._drv = UartDriver(**drv_kwargs)
         self._running = False
 
     def start(self) -> None:
@@ -193,39 +193,26 @@ class KlipperBridge:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Klipper WiFi MCU SPI↔PTY bridge daemon")
+        description="Klipper WiFi MCU UART↔PTY bridge daemon")
     parser.add_argument("--mcus", nargs="+", type=int, default=list(range(8)),
                         metavar="ID",
                         help="MCU IDs to bridge (default: all 8, i.e. 0-7)")
-    parser.add_argument("--spi-bus",    type=int, default=0)
-    parser.add_argument("--spi-dev",    type=int, default=0)
-    parser.add_argument("--spi-speed",  type=int, default=100_000,
-                        help="SPI clock Hz (default 100 kHz)")
-    parser.add_argument("--gpio-chip",  default="/dev/gpiochip4",
-                        help="GPIO chip device (Pi5 default: gpiochip4)")
-    parser.add_argument("--pin-dr",     type=int, default=25,
-                        help="BCM GPIO for DATA_READY input from ESP32-C5")
-    parser.add_argument("--pin-hs",     type=int, default=24,
-                        help="BCM GPIO for HANDSHAKE output to ESP32-C5")
-    parser.add_argument("--pin-cs",     type=int, default=17,
-                        help="BCM GPIO for manual CS (free GPIO, NOT CE0 — Pi5 RP1 workaround, default 17/pin11)")
+    parser.add_argument("--port",     default="/dev/ttyAMA0",
+                        help="UART device (default /dev/ttyAMA0)")
+    parser.add_argument("--baudrate", type=int, default=1_000_000,
+                        help="Baud rate (default 1000000)")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    spi_kwargs = {
-        "spi_bus":        args.spi_bus,
-        "spi_device":     args.spi_dev,
-        "spi_speed_hz":   args.spi_speed,
-        "gpio_chip":      args.gpio_chip,
-        "pin_data_ready": args.pin_dr,
-        "pin_handshake":  args.pin_hs,
-        "pin_cs":         args.pin_cs,
+    drv_kwargs = {
+        "port":     args.port,
+        "baudrate": args.baudrate,
     }
 
-    bridge = KlipperBridge(mcu_ids=args.mcus, spi_kwargs=spi_kwargs)
+    bridge = KlipperBridge(mcu_ids=args.mcus, drv_kwargs=drv_kwargs)
 
     def _shutdown(sig, frame):
         log.info("Signal %d received, shutting down...", sig)

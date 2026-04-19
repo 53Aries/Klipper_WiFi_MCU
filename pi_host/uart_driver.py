@@ -1,35 +1,27 @@
 """
 uart_driver.py - Pi5 UART driver for KWM host transport
 
-Replaces spi_driver.py. Communicates with the host ESP32-C5 over
-a 1 Mbaud UART on /dev/ttyAMA0 (Pi5, Bluetooth disabled via
-dtoverlay=disable-bt in /boot/firmware/config.txt).
+Communicates with the host XIAO ESP32-C5 over a 1 Mbaud UART on
+/dev/ttyAMA0 (Bluetooth must be disabled — see setup below).
 
-Wiring:
+Wiring (3 wires total):
   Pi BCM14 (pin 8,  TXD) → XIAO GPIO12 (D7/RX)
   Pi BCM15 (pin 10, RXD) ← XIAO GPIO11 (D6/TX)
-  Pi GND   (pin 6)       → XIAO GND
+  Pi GND   (any GND pin) → XIAO GND
 
-Frame format (variable-length, same header as SPI):
-  [0..1]   Magic: 0xAB 0xCD
-  [2]      Command
-  [3]      MCU ID (bits 3:0) | Flags (bits 7:4)
-  [4]      Sequence number
-  [5]      Reserved (0)
-  [6..7]   Payload length, big-endian
-  [8..N]   Payload
-  [N+1..N+2]  CRC16-CCITT of bytes [0..N]
+Pi5 one-time setup:
+  1. Add to /boot/firmware/config.txt:   dtoverlay=disable-bt
+  2. sudo reboot
+  3. sudo apt install python3-serial
 
-Install:
-  sudo apt install python3-serial
-  Add dtoverlay=disable-bt to /boot/firmware/config.txt and reboot.
-
-TODO: implement full send/recv — this is a stub.
+Frame format: fixed 256-byte KWM frames (magic + 8-byte header + 246-byte
+payload + 2-byte CRC16-CCITT), identical to the former SPI transport.
 """
 
 import struct
 import threading
 import queue
+import time
 import logging
 from typing import Optional
 
@@ -42,10 +34,12 @@ log = logging.getLogger(__name__)
 
 # ── Protocol constants (must match kwm_protocol.h) ────────────────────────────
 
-MAGIC_0         = 0xAB
-MAGIC_1         = 0xCD
-HEADER_LEN      = 8
-CRC_LEN         = 2
+MAGIC_0     = 0xAB
+MAGIC_1     = 0xCD
+FRAME_LEN   = 256
+HEADER_LEN  = 8
+CRC_LEN     = 2
+PAYLOAD_MAX = FRAME_LEN - HEADER_LEN - CRC_LEN   # 246
 
 CMD_NOOP        = 0x00
 CMD_DATA        = 0x01
@@ -58,8 +52,6 @@ CMD_ACK         = 0x07
 
 FLAG_NONE       = 0x00
 FLAG_MORE_DATA  = 0x10
-
-PAYLOAD_MAX     = 4096   # generous cap; typical Klipper frames are <256 bytes
 
 
 # ── CRC16-CCITT ───────────────────────────────────────────────────────────────
@@ -79,29 +71,27 @@ def _crc16_ccitt(data: bytes) -> int:
 def build_frame(cmd: int, mcu_id: int, seq: int,
                 payload: bytes, flags: int = FLAG_NONE) -> bytes:
     if len(payload) > PAYLOAD_MAX:
-        raise ValueError(f"payload too large: {len(payload)}")
+        raise ValueError(f"payload {len(payload)} > {PAYLOAD_MAX}")
     mcu_id_flags = (mcu_id & 0x0F) | (flags & 0xF0)
     hdr = struct.pack(">BBBBBBH",
                       MAGIC_0, MAGIC_1, cmd, mcu_id_flags,
                       seq, 0, len(payload))
-    body = hdr + payload
+    padded = payload + bytes(PAYLOAD_MAX - len(payload))
+    body   = hdr + padded
     return body + struct.pack(">H", _crc16_ccitt(body))
 
 
 def parse_frame(raw: bytes) -> Optional[dict]:
-    if len(raw) < HEADER_LEN + CRC_LEN:
+    if len(raw) != FRAME_LEN:
         return None
     if raw[0] != MAGIC_0 or raw[1] != MAGIC_1:
         return None
+    expected = _crc16_ccitt(raw[:-2])
+    received = struct.unpack_from(">H", raw, FRAME_LEN - 2)[0]
+    if expected != received:
+        log.debug("CRC mismatch: expected=%04x got=%04x", expected, received)
+        return None
     payload_len = struct.unpack_from(">H", raw, 6)[0]
-    expected_len = HEADER_LEN + payload_len + CRC_LEN
-    if len(raw) != expected_len:
-        return None
-    expected_crc = _crc16_ccitt(raw[:-2])
-    recv_crc = struct.unpack_from(">H", raw, -2)[0]
-    if expected_crc != recv_crc:
-        log.debug("CRC mismatch: expected=%04x got=%04x", expected_crc, recv_crc)
-        return None
     return {
         "cmd":     raw[2],
         "mcu_id":  raw[3] & 0x0F,
@@ -114,26 +104,22 @@ def parse_frame(raw: bytes) -> Optional[dict]:
 # ── UART driver ───────────────────────────────────────────────────────────────
 
 class UartDriver:
-    """
-    Full-duplex UART driver for Pi5 ↔ host ESP32-C5.
+    """Full-duplex UART driver for Pi5 ↔ host ESP32-C5."""
 
-    TODO: Implement _driver_loop with real UART send/recv.
-    """
-
-    def __init__(
-        self,
-        port:     str = "/dev/ttyAMA0",
-        baudrate: int = 1_000_000,
-    ):
+    def __init__(self, port: str = "/dev/ttyAMA0", baudrate: int = 1_000_000):
         self._port     = port
         self._baudrate = baudrate
         self._ser: Optional[serial.Serial] = None
+
         self._tx_queue: queue.Queue = queue.Queue(maxsize=64)
         self._rx_queue: queue.Queue = queue.Queue(maxsize=64)
-        self._tx_seq   = 0
-        self._lock     = threading.Lock()
-        self._running  = False
-        self._thread: Optional[threading.Thread] = None
+        self._tx_seq  = 0
+        self._lock    = threading.Lock()
+        self._running = False
+        self._tx_thread: Optional[threading.Thread] = None
+        self._rx_thread: Optional[threading.Thread] = None
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def open(self) -> None:
         self._ser = serial.Serial(
@@ -143,21 +129,28 @@ class UartDriver:
             stopbits=serial.STOPBITS_ONE,
             timeout=0.1,
         )
+        self._ser.reset_input_buffer()
         log.info("UART opened: %s @ %d baud", self._port, self._baudrate)
         self._running = True
-        self._thread = threading.Thread(target=self._driver_loop,
-                                        name="kwm-uart", daemon=True)
-        self._thread.start()
+        self._tx_thread = threading.Thread(target=self._tx_loop,
+                                           name="kwm-uart-tx", daemon=True)
+        self._rx_thread = threading.Thread(target=self._rx_loop,
+                                           name="kwm-uart-rx", daemon=True)
+        self._tx_thread.start()
+        self._rx_thread.start()
 
     def close(self) -> None:
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=2.0)
+        for t in (self._tx_thread, self._rx_thread):
+            if t:
+                t.join(timeout=2.0)
         if self._ser:
             self._ser.close()
 
     def __enter__(self): self.open(); return self
     def __exit__(self, *_): self.close()
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     def send(self, mcu_id: int, data: bytes,
              flags: int = FLAG_NONE, timeout: float = 1.0) -> None:
@@ -175,9 +168,65 @@ class UartDriver:
         except queue.Empty:
             return None
 
-    def _driver_loop(self) -> None:
-        """TODO: read frames from UART, write queued frames to UART."""
-        log.warning("UartDriver._driver_loop: NOT YET IMPLEMENTED")
+    # ── Background loops ──────────────────────────────────────────────────────
+
+    def _tx_loop(self) -> None:
+        log.info("UART TX loop started")
         while self._running:
-            import time; time.sleep(1)
-        log.info("UART driver loop exiting")
+            try:
+                frame = self._tx_queue.get(timeout=0.1)
+                self._ser.write(frame)
+            except queue.Empty:
+                pass
+            except Exception as e:
+                log.warning("UART TX error: %s", e)
+        log.info("UART TX loop exiting")
+
+    def _rx_loop(self) -> None:
+        """Read fixed 256-byte frames from UART with magic-based resync."""
+        log.info("UART RX loop started")
+        buf = bytearray()
+
+        while self._running:
+            try:
+                chunk = self._ser.read(FRAME_LEN - len(buf))
+            except Exception as e:
+                log.warning("UART RX read error: %s", e)
+                time.sleep(0.01)
+                continue
+
+            if not chunk:
+                continue
+
+            buf.extend(chunk)
+
+            # Discard leading bytes until we see the magic header.
+            while len(buf) >= 2 and not (buf[0] == MAGIC_0 and buf[1] == MAGIC_1):
+                log.debug("RX resync: discarding 0x%02x", buf[0])
+                buf = buf[1:]
+
+            if len(buf) < FRAME_LEN:
+                continue
+
+            raw = bytes(buf[:FRAME_LEN])
+            buf = buf[FRAME_LEN:]
+
+            frame = parse_frame(raw)
+            if frame is None:
+                log.debug("RX bad frame (CRC/magic), resyncing")
+                # Put remaining bytes back so we re-examine them.
+                buf = bytearray(raw[1:]) + buf
+                continue
+
+            if frame["cmd"] == CMD_NOOP:
+                continue
+
+            log.debug("RX cmd=0x%02x mcu=%d len=%d",
+                      frame["cmd"], frame["mcu_id"], len(frame["payload"]))
+            try:
+                self._rx_queue.put_nowait(frame)
+            except queue.Full:
+                log.warning("RX queue full, dropping frame from MCU %d",
+                            frame["mcu_id"])
+
+        log.info("UART RX loop exiting")

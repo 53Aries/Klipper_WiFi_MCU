@@ -33,7 +33,7 @@ extern "C" {
 #  define KWM_UART_RX_PIN  17
 #endif
 #ifndef KWM_UART_BAUD
-#  define KWM_UART_BAUD  250000
+#  define KWM_UART_BAUD  500000
 #endif
 #ifndef KWM_UART_BUF_SIZE
 #  define KWM_UART_BUF_SIZE  2048

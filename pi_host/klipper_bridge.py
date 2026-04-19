@@ -153,6 +153,7 @@ class KlipperBridge:
                 for mid, ch in self._channels.items():
                     data = ch.read_nowait()
                     if data:
+                        log.debug("TX mcu=%d len=%d", mid, len(data))
                         try:
                             self._drv.send(mcu_id=mid, data=data, timeout=0.5)
                             sent_any = True

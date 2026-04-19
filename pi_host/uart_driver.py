@@ -225,9 +225,9 @@ class UartDriver:
             log.debug("RX cmd=0x%02x mcu=%d len=%d",
                       frame["cmd"], frame["mcu_id"], len(frame["payload"]))
             try:
-                self._rx_queue.put_nowait(frame)
+                self._rx_queue.put(frame, timeout=1.0)
             except queue.Full:
-                log.warning("RX queue full, dropping frame from MCU %d",
+                log.warning("RX queue full after 1s, dropping frame from MCU %d",
                             frame["mcu_id"])
 
         log.info("UART RX loop exiting")

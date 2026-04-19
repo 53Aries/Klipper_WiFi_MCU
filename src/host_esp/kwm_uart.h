@@ -4,9 +4,9 @@
  * Replaces the SPI slave transport. The Pi talks to the ESP over a
  * simple UART at KWM_HOST_UART_BAUD (default 1 Mbaud).
  *
- * Frame format is identical to the SPI frame (magic + header + payload +
- * CRC16), but frames are variable-length: only HEADER_LEN + payload_len +
- * CRC_LEN bytes are transmitted — no padding to 256 bytes.
+ * Frame format: fixed 256-byte KWM frames (magic + 8-byte header +
+ * 246-byte padded payload + 2-byte CRC16-CCITT), matching the protocol
+ * definition in kwm_protocol.h.
  *
  * Pin assignments – Seeed XIAO ESP32-C5 (host board):
  *   UART1 TX  GPIO11 (D6) → Pi BCM15 (pin 10, RXD)
@@ -37,7 +37,7 @@ extern "C" {
 #endif
 
 #ifndef KWM_UART_QUEUE_DEPTH
-#  define KWM_UART_QUEUE_DEPTH  16
+#  define KWM_UART_QUEUE_DEPTH  32
 #endif
 
 esp_err_t kwm_uart_init(void);

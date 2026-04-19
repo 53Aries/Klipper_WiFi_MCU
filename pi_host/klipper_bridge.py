@@ -32,7 +32,6 @@ import select
 import signal
 import sys
 import threading
-import time
 import logging
 
 from uart_driver import UartDriver, CMD_DATA, CMD_CONNECT, CMD_DISCONNECT, PAYLOAD_MAX
@@ -84,16 +83,6 @@ class PtyChannel:
         except OSError:
             pass
 
-    def read_nowait(self) -> bytes:
-        """Read any available bytes from the master fd (non-blocking)."""
-        r, _, _ = select.select([self.master_fd], [], [], 0)
-        if r:
-            try:
-                return os.read(self.master_fd, PAYLOAD_MAX)
-            except OSError:
-                return b""
-        return b""
-
     def write(self, data: bytes) -> None:
         """Write bytes to the master fd (Klipper reads from slave)."""
         try:
@@ -130,9 +119,9 @@ class KlipperBridge:
             ch.create_symlink()
         self._running = True
 
-        # Spawn receive thread (SPI→PTY).
+        # Spawn receive thread (UART→PTY).
         self._rx_thread = threading.Thread(target=self._rx_loop,
-                                           name="spi-rx", daemon=True)
+                                           name="uart-rx", daemon=True)
         self._rx_thread.start()
 
         log.info("Bridge running. MCUs: %s", list(self._channels.keys()))
@@ -146,21 +135,29 @@ class KlipperBridge:
         log.info("Bridge stopped")
 
     def run_forever(self) -> None:
-        """TX loop (main thread): PTY → SPI."""
+        """TX loop (main thread): PTY → UART, driven by select()."""
+        fds = [ch.master_fd for ch in self._channels.values()]
+        fd_to_mid = {ch.master_fd: mid for mid, ch in self._channels.items()}
         try:
             while self._running:
-                sent_any = False
-                for mid, ch in self._channels.items():
-                    data = ch.read_nowait()
+                try:
+                    r, _, _ = select.select(fds, [], [], 0.001)  # 1 ms timeout
+                except (ValueError, OSError):
+                    break
+                for fd in r:
+                    mid = fd_to_mid.get(fd)
+                    if mid is None:
+                        continue
+                    try:
+                        data = os.read(fd, PAYLOAD_MAX)
+                    except OSError:
+                        continue
                     if data:
                         log.debug("TX mcu=%d len=%d", mid, len(data))
                         try:
                             self._drv.send(mcu_id=mid, data=data, timeout=0.5)
-                            sent_any = True
                         except Exception as e:
-                            log.warning("SPI send for MCU %d failed: %s", mid, e)
-                if not sent_any:
-                    time.sleep(0.0005)   # 500 µs idle
+                            log.warning("UART send for MCU %d failed: %s", mid, e)
         except KeyboardInterrupt:
             pass
         finally:

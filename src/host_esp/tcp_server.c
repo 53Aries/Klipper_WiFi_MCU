@@ -62,6 +62,7 @@ typedef struct {
     uint16_t     payload_len;
     uint8_t      crc_buf[2];
     uint8_t      crc_pos;
+    bool         connect_seen;  /* set only after a CRC-valid CONNECT frame */
 } rx_ctx_t;
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -133,12 +134,7 @@ static bool rx_feed(rx_ctx_t *ctx, uint8_t byte, const tcp_server_rx_cb_t rx_cb)
             ctx->crc_pos = 0;
             ctx->state = RX_WAIT_MAGIC0;
 
-            /* Verify CRC over header + payload. */
-            uint16_t expected = kwm_crc16(ctx->hdr, KWM_TCP_HEADER_LEN);
-            if (ctx->payload_len > 0)
-                expected = kwm_crc16_update(0, 0); /* reset handled below */
-
-            /* Proper CRC: init 0xFFFF, feed header then payload. */
+            /* Verify CRC: init 0xFFFF, feed header then payload. */
             uint16_t crc = 0xFFFF;
             for (int i = 0; i < KWM_TCP_HEADER_LEN; i++)
                 crc = kwm_crc16_update(crc, ctx->hdr[i]);
@@ -154,6 +150,9 @@ static bool rx_feed(rx_ctx_t *ctx, uint8_t byte, const tcp_server_rx_cb_t rx_cb)
             /* Dispatch. */
             kwm_cmd_t cmd   = (kwm_cmd_t)ctx->hdr[2];
             uint8_t mcu_id  = kwm_mcu_id(ctx->hdr[3]);
+
+            if (cmd == KWM_CMD_CONNECT)
+                ctx->connect_seen = true;
 
             if (cmd == KWM_CMD_DATA && rx_cb && ctx->payload_len > 0) {
                 rx_cb(mcu_id, ctx->payload, ctx->payload_len);
@@ -259,14 +258,14 @@ static void mcu_conn_task(void *pvParam) {
         if (n <= 0) break;
 
         for (int i = 0; i < n; i++) {
-            rx_feed(&ctx, rx_buf[i], NULL); /* custom handler below */
-            /* Check if we just completed a CONNECT frame */
-            if (ctx.state == RX_WAIT_MAGIC0 && ctx.hdr[2] == KWM_CMD_CONNECT) {
+            rx_feed(&ctx, rx_buf[i], NULL);
+            if (ctx.connect_seen) {
                 mcu_id = kwm_mcu_id(ctx.hdr[3]);
                 if (mcu_id < KWM_MAX_MCU) {
                     identified = true;
                     break;
                 }
+                ctx.connect_seen = false;  /* bad id, keep waiting */
             }
         }
     }

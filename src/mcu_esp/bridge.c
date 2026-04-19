@@ -21,7 +21,7 @@ static const char *TAG = "bridge";
 /* ── UART → TCP ──────────────────────────────────────────────────────────── */
 
 static void on_uart_rx(const uint8_t *data, size_t len) {
-    ESP_LOGI(TAG, "UART→TCP len=%u", (unsigned)len);
+    ESP_LOGD(TAG, "UART→TCP len=%u", (unsigned)len);
     size_t offset = 0;
     while (offset < len) {
         uint16_t chunk = (uint16_t)(len - offset);
@@ -29,7 +29,10 @@ static void on_uart_rx(const uint8_t *data, size_t len) {
 
         esp_err_t ret = tcp_client_send(data + offset, chunk);
         if (ret == ESP_ERR_INVALID_STATE) {
-            /* Not connected – silently drop (Klipper will detect timeout). */
+            /* Not connected – drop remaining chunks. Klipper will detect
+             * the timeout on its own; we log so it shows in the monitor. */
+            ESP_LOGW(TAG, "TCP not connected, dropping %u bytes from STM32",
+                     (unsigned)(len - offset));
             break;
         } else if (ret != ESP_OK) {
             ESP_LOGW(TAG, "tcp_client_send failed: %s", esp_err_to_name(ret));
@@ -41,7 +44,7 @@ static void on_uart_rx(const uint8_t *data, size_t len) {
 /* ── TCP → UART ──────────────────────────────────────────────────────────── */
 
 static void on_tcp_rx(const uint8_t *data, uint16_t len) {
-    ESP_LOGI(TAG, "TCP→UART len=%u", len);
+    ESP_LOGD(TAG, "TCP→UART len=%u", len);
     esp_err_t ret = kwm_uart_send(data, len);
     if (ret != ESP_OK)
         ESP_LOGW(TAG, "kwm_uart_send failed: %s", esp_err_to_name(ret));

@@ -32,7 +32,7 @@ typedef struct {
     uint8_t  data[KWM_SPI_PAYLOAD_MAX];
 } pending_t;
 
-#define UART_PENDING_DEPTH  16
+#define UART_PENDING_DEPTH  64
 static QueueHandle_t s_uart_pending_queue;
 
 /* ── TCP callbacks (called from TCP receive task) ────────────────────────── */
@@ -41,7 +41,7 @@ static void enqueue(uint8_t cmd, uint8_t mcu_id,
                     const uint8_t *data, uint16_t len) {
     pending_t pkt = { .cmd = cmd, .mcu_id = mcu_id, .len = len };
     if (len) memcpy(pkt.data, data, len);
-    if (xQueueSend(s_uart_pending_queue, &pkt, pdMS_TO_TICKS(50)) != pdTRUE)
+    if (xQueueSend(s_uart_pending_queue, &pkt, pdMS_TO_TICKS(100)) != pdTRUE)
         ESP_LOGW(TAG, "TX queue full, dropping cmd=0x%02x for MCU %u", cmd, mcu_id);
 }
 
@@ -68,7 +68,7 @@ static void on_tcp_rx(uint8_t mcu_id, const uint8_t *data, uint16_t len) {
 static void uart_to_tcp_task(void *pvParam) {
     (void)pvParam;
     static uint8_t s_rx_frame[KWM_SPI_FRAME_LEN];
-    ESP_LOGI(TAG, "uart_to_tcp task started");
+    ESP_LOGD(TAG, "uart_to_tcp task started");
 
     while (true) {
         esp_err_t ret = kwm_uart_recv(s_rx_frame, portMAX_DELAY);
@@ -79,7 +79,7 @@ static void uart_to_tcp_task(void *pvParam) {
         uint16_t plen   = kwm_be16((const uint8_t *)&f->payload_len);
 
         if (f->cmd == KWM_CMD_DATA && plen > 0 && plen <= KWM_SPI_PAYLOAD_MAX) {
-            ESP_LOGI(TAG, "UART→TCP mcu=%u len=%u", mcu_id, plen);
+            ESP_LOGD(TAG, "UART\u2192TCP mcu=%u len=%u", mcu_id, plen);
             if (!tcp_server_mcu_connected(mcu_id)) {
                 ESP_LOGW(TAG, "MCU %u not connected, dropping %u bytes", mcu_id, plen);
                 continue;
@@ -100,7 +100,7 @@ static void tcp_to_uart_task(void *pvParam) {
     (void)pvParam;
     static uint8_t s_tx_frame[KWM_SPI_FRAME_LEN];
     static uint8_t s_tx_seq;
-    ESP_LOGI(TAG, "tcp_to_uart task started");
+    ESP_LOGD(TAG, "tcp_to_uart task started");
 
     while (true) {
         pending_t pkt;

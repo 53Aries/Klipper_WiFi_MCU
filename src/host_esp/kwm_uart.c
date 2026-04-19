@@ -31,7 +31,7 @@ static QueueHandle_t s_rx_queue;
 
 static void uart_tx_task(void *pvParam) {
     (void)pvParam;
-    ESP_LOGI(TAG, "TX task started");
+    ESP_LOGD(TAG, "TX task started");
     while (true) {
         uint8_t *ptr = NULL;
         if (xQueueReceive(s_tx_queue, &ptr, portMAX_DELAY) == pdTRUE) {
@@ -45,7 +45,7 @@ static void uart_tx_task(void *pvParam) {
 
 static void uart_rx_task(void *pvParam) {
     (void)pvParam;
-    ESP_LOGI(TAG, "RX task started");
+    ESP_LOGD(TAG, "RX task started");
 
     static uint8_t buf[KWM_SPI_FRAME_LEN];
     int pos = 0;
@@ -126,9 +126,9 @@ esp_err_t kwm_uart_send(const uint8_t *frame) {
     uint8_t *copy = malloc(KWM_SPI_FRAME_LEN);
     if (!copy) return ESP_ERR_NO_MEM;
     memcpy(copy, frame, KWM_SPI_FRAME_LEN);
-    if (xQueueSend(s_tx_queue, &copy, 0) != pdTRUE) {
+    if (xQueueSend(s_tx_queue, &copy, pdMS_TO_TICKS(100)) != pdTRUE) {
         free(copy);
-        return ESP_ERR_NO_MEM;
+        return ESP_ERR_TIMEOUT;
     }
     return ESP_OK;
 }

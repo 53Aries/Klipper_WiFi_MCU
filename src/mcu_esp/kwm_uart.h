@@ -2,7 +2,7 @@
  * kwm_uart.h - UART hardware abstraction for MCU ESP32-C5
  *
  * Drives UART1 connecting the ESP32-C5 to the STM32 Klipper MCU.
- * Default: 250000 baud, 8N1 – the standard Klipper serial rate.
+ * Default: 500000 baud, 8N1.
  * Override baud in sdkconfig.defaults (CONFIG_KWM_UART_BAUD).
  *
  * Pins (override in sdkconfig):
